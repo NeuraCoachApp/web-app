@@ -77,6 +77,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const requestSession = async () => {
       try {
+        // Check if Supabase is properly configured
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+        if (!supabaseUrl || supabaseUrl.includes('placeholder')) {
+          console.warn('Supabase not configured - auth will not work')
+          loadStack.sessionLoaded.current = true
+          loadStack.profileLoaded.current = true
+          checkLoadedState()
+          return
+        }
+
         const { data: { session }, error } = await supabase.auth.getSession()
         loadStack.sessionLoaded.current = true
         
