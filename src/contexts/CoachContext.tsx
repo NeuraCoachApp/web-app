@@ -69,12 +69,16 @@ export function CoachProvider({ children }: { children: React.ReactNode }) {
         currentSpeechRef.current = null
       }
 
-      setState(prev => ({ 
-        ...prev, 
-        isSpeaking: true, 
-        currentMessage: message,
-        spokenMessages: new Set([...prev.spokenMessages, message])
-      }))
+      setState(prev => {
+        const newSpokenMessages = new Set(prev.spokenMessages)
+        newSpokenMessages.add(message)
+        return {
+          ...prev, 
+          isSpeaking: true, 
+          currentMessage: message,
+          spokenMessages: newSpokenMessages
+        }
+      })
 
       await playText(
         message,
