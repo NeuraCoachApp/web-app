@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import { User, Session } from '@supabase/supabase-js'
-import { supabase } from '@/src/lib/supabase'
+import { supabase, isSupabaseConfigured } from '@/src/lib/supabase'
 import { Profile, getOrCreateProfile } from '@/src/lib/profile'
 
 interface AuthContextType {
@@ -48,6 +48,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   useEffect(() => {
+    if (!isSupabaseConfigured || !supabase) {
+      console.warn('Supabase not configured. Authentication features disabled.')
+      setLoading(false)
+      return
+    }
+
     // Get initial session
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       try {
@@ -63,46 +69,65 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } finally {
         setLoading(false)
       }
+    }).catch((error) => {
+      console.error('Error getting initial session:', error)
+      setLoading(false)
     })
 
     // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      try {
-        // Accept users even if email is not confirmed
-        if (session?.user) {
-          setSession(session)
-          setUser(session.user)
-          // Load profile but don't let it block the auth flow
-          loadProfile(session.user).catch(console.warn)
-        } else {
-          setSession(null)
-          setUser(null)
-          setProfile(null)
+    let subscription: any = null
+    try {
+      const authListener = supabase.auth.onAuthStateChange(async (_event, session) => {
+        try {
+          // Accept users even if email is not confirmed
+          if (session?.user) {
+            setSession(session)
+            setUser(session.user)
+            // Load profile but don't let it block the auth flow
+            loadProfile(session.user).catch(console.warn)
+          } else {
+            setSession(null)
+            setUser(null)
+            setProfile(null)
+          }
+        } catch (error) {
+          console.error('Error in auth state change:', error)
+        } finally {
+          setLoading(false)
         }
-      } catch (error) {
-        console.error('Error in auth state change:', error)
-      } finally {
-        setLoading(false)
-      }
-    })
+      })
+      subscription = authListener.data.subscription
+    } catch (error) {
+      console.error('Error setting up auth listener:', error)
+      setLoading(false)
+    }
 
-    return () => subscription.unsubscribe()
+    return () => {
+      if (subscription) {
+        subscription.unsubscribe()
+      }
+    }
   }, [])
 
   const signOut = async () => {
+    if (!supabase) {
+      throw new Error('Supabase not configured')
+    }
     await supabase.auth.signOut()
   }
 
   const signIn = async (email: string, password: string) => {
+    if (!supabase) {
+      return { error: new Error('Supabase not configured') }
+    }
+
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     })
     
     // If there's an error about email not confirmed, we'll still try to set the user
-    if (error && error.message.includes('Email not confirmed')) {
+    if (error && error.message && error.message.includes('Email not confirmed')) {
       // The user exists but email isn't confirmed - we'll allow them in anyway
       if (data.user) {
         setUser(data.user)
@@ -115,6 +140,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const signUp = async (email: string, password: string) => {
+    if (!supabase) {
+      return { error: new Error('Supabase not configured') }
+    }
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -126,6 +155,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const resetPassword = async (email: string) => {
+    if (!supabase) {
+      return { error: new Error('Supabase not configured') }
+    }
+
     const { data, error } = await supabase.auth.resetPasswordForEmail(email)
     return { error }
   }
