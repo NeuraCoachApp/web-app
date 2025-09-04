@@ -8,14 +8,20 @@
 
 **Quick Fix**:
 1. Go to your Supabase Dashboard → SQL Editor
-2. Run this command to remove problematic triggers:
+2. Run the cleanup migration first:
 ```sql
+-- Clean up any existing problematic triggers
 DROP TRIGGER IF EXISTS create_profile_trigger ON auth.users;
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 DROP FUNCTION IF EXISTS create_profile_for_user();
+DROP FUNCTION IF EXISTS public.handle_new_user();
 ```
 3. Try signing up again
 
-**Permanent Fix**: Use the updated migration file `001_create_profiles_table_simple.sql` instead of the original one.
+**Permanent Fix**: 
+1. Run `000_cleanup_existing_triggers.sql` first
+2. Then run `001_create_profiles_with_trigger.sql` for the new trigger setup
+3. This will automatically create profiles when users sign up
 
 ### 2. Stuck on "Loading..." or "Please wait..." forever
 

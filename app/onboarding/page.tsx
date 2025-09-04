@@ -5,9 +5,10 @@ import { useAuth } from '@/src/contexts/AuthContext'
 import { useCoach } from '@/src/contexts/CoachContext'
 import { useRouter } from 'next/navigation'
 import AnimatedBlob from '@/src/components/ui/animated-blob'
+import VoiceInput from '@/src/components/ui/voice-input'
 import { motion, AnimatePresence } from 'framer-motion'
 import { updateProfile } from '@/src/lib/profile'
-import { Mic, MicOff } from 'lucide-react'
+import { useSpeechRecognition } from '@/src/lib/speech-recognition'
 
 const onboardingSteps = [
   {
@@ -91,11 +92,9 @@ export default function Onboarding() {
     isListening, 
     hasVoiceEnabled, 
     enableVoice, 
-    speak, 
-    startListening, 
-    stopListening,
-    requestMicPermission 
+    speak
   } = useCoach()
+  const { extractName } = useSpeechRecognition()
   const router = useRouter()
   const [currentStep, setCurrentStep] = useState(0)
   const [userName, setUserName] = useState('')
@@ -144,18 +143,18 @@ export default function Onboarding() {
     }
   }, [currentStep, router])
 
-  const handleVoiceInput = async () => {
+  const handleVoiceTranscript = async (transcript: string, isFinal: boolean) => {
+    if (!isFinal) {
+      // Show interim results in the input
+      setUserName(transcript)
+      return
+    }
+
+    // Process final transcript
     setSpeechError('')
-
+    
     try {
-      // Request microphone permission first
-      const hasPermission = await requestMicPermission()
-      if (!hasPermission) {
-        setSpeechError('Microphone permission is required for voice input')
-        return
-      }
-
-      const nameResult = await startListening()
+      const nameResult = extractName(transcript)
       
       if (nameResult.confidence > 0.3) {
         if (nameResult.firstName) {
@@ -179,15 +178,13 @@ export default function Onboarding() {
           }
         }
       } else {
-        setSpeechError('Could not understand your name. Please try again or type it manually.')
+        // Keep the transcript as the user name if we can't extract structured names
+        setUserName(transcript)
+        setSpeechError('Could not extract first/last name, but kept your input.')
       }
     } catch (error) {
-      console.error('Speech recognition error:', error)
-      if (error.message?.includes('permission')) {
-        setSpeechError('Microphone permission denied. Please allow microphone access and try again.')
-      } else {
-        setSpeechError('Failed to recognize speech. Please try again or type your name.')
-      }
+      console.error('Name extraction error:', error)
+      setUserName(transcript) // Keep the raw transcript
     }
   }
 
@@ -299,58 +296,40 @@ export default function Onboarding() {
             {/* Name Input */}
             {currentStep === 0 && (
               <div className="mt-8 space-y-4">
-                {hasVoiceEnabled && (
-                  <div className="space-y-4">
-                    <div className="text-center">
-                      <button
-                        onClick={isListening ? stopListening : handleVoiceInput}
-                        className={`inline-flex items-center gap-2 px-6 py-3 rounded-lg transition-colors ${
-                          isListening
-                            ? 'bg-red-600 hover:bg-red-700'
-                            : 'bg-purple-600 hover:bg-purple-700'
-                        } text-white`}
-                      >
-                        {isListening ? (
-                          <>
-                            <MicOff className="w-4 h-4" />
-                            Listening... (Click to stop)
-                          </>
-                        ) : (
-                          <>
-                            <Mic className="w-4 h-4" />
-                            Speak Your Name
-                          </>
-                        )}
-                      </button>
+                <div className="relative max-w-md mx-auto">
+                  <input
+                    type="text"
+                    placeholder="Enter your name or use voice input"
+                    value={userName}
+                    onChange={(e) => {
+                      setUserName(e.target.value)
+                      // Clear voice-captured names if user starts typing manually
+                      if (e.target.value !== userName) {
+                        setFirstName('')
+                        setLastName('')
+                      }
+                    }}
+                    className="w-full px-4 py-3 pr-12 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    autoFocus
+                  />
+                  
+                  {/* Voice Input Button inside the text input */}
+                  {hasVoiceEnabled && (
+                    <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
+                      <VoiceInput
+                        onTranscript={handleVoiceTranscript}
+                        onError={(error) => setSpeechError(error)}
+                        placeholder="Say your name..."
+                      />
                     </div>
-                    
-                    {speechError && (
-                      <div className="text-red-400 text-sm text-center">
-                        {speechError}
-                      </div>
-                    )}
-                    
-                    <div className="text-gray-400 text-sm text-center">
-                      or type it below
-                    </div>
+                  )}
+                </div>
+                
+                {speechError && (
+                  <div className="text-red-400 text-sm text-center max-w-md mx-auto">
+                    {speechError}
                   </div>
                 )}
-                
-                <input
-                  type="text"
-                  placeholder="Enter your name"
-                  value={userName}
-                  onChange={(e) => {
-                    setUserName(e.target.value)
-                    // Clear voice-captured names if user starts typing
-                    if (e.target.value !== userName) {
-                      setFirstName('')
-                      setLastName('')
-                    }
-                  }}
-                  className="w-full max-w-md mx-auto block px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  autoFocus={!hasVoiceEnabled}
-                />
                 
                 {(firstName || lastName) && (
                   <div className="text-center text-sm text-green-400">

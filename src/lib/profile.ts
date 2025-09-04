@@ -1,7 +1,6 @@
 import { supabase } from './supabase'
 
 export interface Profile {
-  id: string
   user_uuid: string
   first_name: string | null
   last_name: string | null
