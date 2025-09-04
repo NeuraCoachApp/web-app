@@ -68,7 +68,7 @@ class SpeechRecognitionService {
     return new Promise((resolve, reject) => {
       // Configure recognition
       this.recognition.continuous = options.continuous || false
-      this.recognition.interimResults = options.interimResults || false
+      this.recognition.interimResults = options.interimResults !== false // Default to true for real-time feedback
       this.recognition.lang = options.language || 'en-US'
       this.recognition.maxAlternatives = options.maxAlternatives || 1
 
@@ -82,9 +82,18 @@ class SpeechRecognitionService {
           
           if (event.results[i].isFinal) {
             finalTranscript += transcript
+            // Call the final result callback if provided
+            if (options.onFinalResult) {
+              options.onFinalResult(transcript.trim())
+            }
           } else {
             interimTranscript += transcript
           }
+        }
+
+        // Call the interim result callback if provided
+        if (interimTranscript && options.onInterimResult) {
+          options.onInterimResult(interimTranscript.trim())
         }
 
         // If we have a final result, resolve with it
@@ -243,12 +252,17 @@ export function useSpeechRecognition() {
     return service.extractNameFromSpeech(speechText)
   }
 
-  const listenForName = async (): Promise<NameExtractionResult> => {
+  const listenForName = async (
+    onInterimResult?: (transcript: string) => void,
+    onFinalResult?: (transcript: string) => void
+  ): Promise<NameExtractionResult> => {
     try {
       const speechText = await startListening({
         continuous: false,
-        interimResults: false,
-        language: 'en-US'
+        interimResults: true,
+        language: 'en-US',
+        onInterimResult,
+        onFinalResult
       })
       
       return extractName(speechText)
@@ -257,9 +271,25 @@ export function useSpeechRecognition() {
     }
   }
 
+  const startListeningWithCallback = async (
+    onInterimResult?: (transcript: string) => void,
+    onFinalResult?: (transcript: string) => void,
+    options?: SpeechRecognitionOptions
+  ): Promise<string> => {
+    return await startListening({
+      continuous: false,
+      interimResults: true,
+      language: 'en-US',
+      ...options,
+      onInterimResult,
+      onFinalResult
+    })
+  }
+
   return {
     isSupported,
     startListening,
+    startListeningWithCallback,
     stopListening,
     requestPermission,
     extractName,

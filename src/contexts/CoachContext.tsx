@@ -16,7 +16,8 @@ interface CoachContextType extends CoachState {
   enableVoice: () => void
   disableVoice: () => void
   speak: (message: string, force?: boolean) => Promise<void>
-  startListening: () => Promise<any>
+  startListening: (onInterimResult?: (transcript: string) => void, onFinalResult?: (transcript: string) => void) => Promise<any>
+  startListeningForText: (onInterimResult?: (transcript: string) => void, onFinalResult?: (transcript: string) => void) => Promise<string>
   stopListening: () => void
   clearSpokenHistory: () => void
   requestMicPermission: () => Promise<boolean>
@@ -34,7 +35,7 @@ export function CoachProvider({ children }: { children: React.ReactNode }) {
   })
 
   const { playText } = useVoiceSynthesis()
-  const { isSupported: speechSupported, listenForName, stopListening: stopSpeechRecognition, requestPermission } = useSpeechRecognition()
+  const { isSupported: speechSupported, listenForName, startListeningWithCallback, stopListening: stopSpeechRecognition, requestPermission } = useSpeechRecognition()
   const currentSpeechRef = useRef<HTMLAudioElement | null>(null)
 
   const enableVoice = useCallback(() => {
@@ -91,7 +92,10 @@ export function CoachProvider({ children }: { children: React.ReactNode }) {
     }
   }, [state.hasVoiceEnabled, state.isSpeaking, state.spokenMessages, playText])
 
-  const startListening = useCallback(async () => {
+  const startListening = useCallback(async (
+    onInterimResult?: (transcript: string) => void,
+    onFinalResult?: (transcript: string) => void
+  ) => {
     if (!speechSupported) {
       throw new Error('Speech recognition is not supported in this browser')
     }
@@ -99,7 +103,7 @@ export function CoachProvider({ children }: { children: React.ReactNode }) {
     setState(prev => ({ ...prev, isListening: true }))
 
     try {
-      const result = await listenForName()
+      const result = await listenForName(onInterimResult, onFinalResult)
       return result
     } catch (error) {
       throw error
@@ -107,6 +111,26 @@ export function CoachProvider({ children }: { children: React.ReactNode }) {
       setState(prev => ({ ...prev, isListening: false }))
     }
   }, [speechSupported, listenForName])
+
+  const startListeningForText = useCallback(async (
+    onInterimResult?: (transcript: string) => void,
+    onFinalResult?: (transcript: string) => void
+  ) => {
+    if (!speechSupported) {
+      throw new Error('Speech recognition is not supported in this browser')
+    }
+
+    setState(prev => ({ ...prev, isListening: true }))
+
+    try {
+      const result = await startListeningWithCallback(onInterimResult, onFinalResult)
+      return result
+    } catch (error) {
+      throw error
+    } finally {
+      setState(prev => ({ ...prev, isListening: false }))
+    }
+  }, [speechSupported, startListeningWithCallback])
 
   const stopListening = useCallback(() => {
     stopSpeechRecognition()
@@ -127,6 +151,7 @@ export function CoachProvider({ children }: { children: React.ReactNode }) {
     disableVoice,
     speak,
     startListening,
+    startListeningForText,
     stopListening,
     clearSpokenHistory,
     requestMicPermission
