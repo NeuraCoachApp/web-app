@@ -4,27 +4,16 @@ import { useAuth } from '@/src/contexts/AuthContext'
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Globe, LogOut, User } from 'lucide-react'
-import SetupRequired from '@/src/components/ui/setup-required'
-import { isSupabaseConfigured } from '@/src/lib/supabase'
 
 export default function Dashboard() {
   const { user, profile, loading, signOut } = useAuth()
   const router = useRouter()
 
   useEffect(() => {
-    if (!loading && !user && isSupabaseConfigured) {
+    if (!loading && !user) {
       router.push('/auth')
     }
   }, [user, loading, router])
-
-  if (!isSupabaseConfigured) {
-    return (
-      <SetupRequired 
-        title="Dashboard Setup Required"
-        message="Supabase configuration is required for the dashboard features."
-      />
-    )
-  }
 
   if (loading) {
     return (

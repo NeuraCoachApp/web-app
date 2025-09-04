@@ -6,11 +6,9 @@ import { useCoach } from '@/src/contexts/CoachContext'
 import { useRouter } from 'next/navigation'
 import AnimatedBlob from '@/src/components/ui/animated-blob'
 import VoiceInput from '@/src/components/ui/voice-input'
-import SetupRequired from '@/src/components/ui/setup-required'
 import { motion, AnimatePresence } from 'framer-motion'
 import { updateProfile } from '@/src/lib/profile'
 import { useSpeechRecognition } from '@/src/lib/speech-recognition'
-import { isSupabaseConfigured } from '@/src/lib/supabase'
 
 const onboardingSteps = [
   {
@@ -108,19 +106,10 @@ export default function Onboarding() {
   const [speechError, setSpeechError] = useState('')
 
   useEffect(() => {
-    if (!loading && !user && isSupabaseConfigured) {
+    if (!loading && !user) {
       router.push('/auth')
     }
   }, [user, loading, router])
-
-  if (!isSupabaseConfigured) {
-    return (
-      <SetupRequired 
-        title="Onboarding Setup Required"
-        message="Supabase configuration is required for the onboarding features."
-      />
-    )
-  }
 
   useEffect(() => {
     // Speak the current step text when it changes
