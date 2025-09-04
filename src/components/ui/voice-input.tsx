@@ -67,9 +67,10 @@ export default function VoiceInput({
           onTranscript(finalText, true)
         }
       )
-    } catch (error: any) {
+    } catch (error) {
       console.error('Voice input error:', error)
-      if (error.message?.includes('permission')) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      if (errorMessage.includes('permission')) {
         onError?.('Microphone permission denied. Please allow microphone access and try again.')
       } else {
         onError?.('Failed to recognize speech. Please try again.')
