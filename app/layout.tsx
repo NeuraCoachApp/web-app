@@ -18,6 +18,9 @@ const dmMono = DM_Mono({
 export const metadata: Metadata = {
   title: 'AI Coach',
   description: 'AI-powered coaching application',
+  icons: {
+    icon: '/favicon.svg',
+  },
 }
 
 export default function RootLayout({
