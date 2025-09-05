@@ -1,92 +1,58 @@
 import { supabase } from './supabase'
+import { Tables, TablesUpdate } from '@/src/types/database'
 
-export interface Profile {
-  user_uuid: string
-  first_name: string | null
-  last_name: string | null
-  created_at: string
-  updated_at: string
-}
-
-export interface ProfileUpdate {
-  first_name?: string | null
-  last_name?: string | null
-}
+// Use the generated database types
+export type Profile = Tables<'profile'>
+export type ProfileUpdate = Pick<TablesUpdate<'profile'>, 'first_name' | 'last_name'>
 
 /**
  * Create a new profile for a user
  */
 export async function createProfile(userUuid: string): Promise<{ data: Profile | null; error: any }> {
-  const { data, error } = await supabase
-    .from('profiles')
-    .insert({
-      user_uuid: userUuid,
-      first_name: null,
-      last_name: null
-    })
-    .select()
-    .single()
+  // TODO: Remove 'as any' after running SQL migration (sql/setup_profile_system.sql)
+  const { data, error } = await supabase.rpc('create_profile' as any, {
+    p_user_uuid: userUuid
+  })
 
-  return { data, error }
+  // RPC returns an array, we want the first item or null
+  return { data: data && data.length > 0 ? data[0] : null, error }
 }
 
 /**
  * Get a user's profile
  */
 export async function getProfile(userUuid: string): Promise<{ data: Profile | null; error: any }> {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('user_uuid', userUuid)
-    .single()
+  const { data, error } = await supabase.rpc('get_profile', {
+    p_user_uuid: userUuid
+  })
 
-  return { data, error }
+  // RPC now returns a single record, not an array
+  return { data: data || null, error }
 }
 
 /**
  * Update a user's profile
  */
 export async function updateProfile(userUuid: string, updates: ProfileUpdate): Promise<{ data: Profile | null; error: any }> {
-  const { data, error } = await supabase
-    .from('profiles')
-    .update({
-      ...updates,
-      updated_at: new Date().toISOString()
-    })
-    .eq('user_uuid', userUuid)
-    .select()
-    .single()
+  // TODO: Remove 'as any' after running SQL migration (sql/setup_profile_system.sql)
+  const { data, error } = await supabase.rpc('update_profile' as any, {
+    p_user_uuid: userUuid,
+    p_first_name: updates.first_name,
+    p_last_name: updates.last_name
+  })
 
-  return { data, error }
+  // RPC returns an array, we want the first item or null
+  return { data: data && data.length > 0 ? data[0] : null, error }
 }
 
 /**
  * Get or create a profile for a user
  */
 export async function getOrCreateProfile(userUuid: string): Promise<{ data: Profile | null; error: any }> {
-  try {
-    // First try to get existing profile
-    const { data: existingProfile, error: getError } = await getProfile(userUuid)
-    
-    if (existingProfile) {
-      return { data: existingProfile, error: null }
-    }
-    
-    // If the table doesn't exist, return null profile
-    if (getError && (getError.message?.includes('relation "profiles" does not exist') || getError.code === '42P01')) {
-      console.warn('Profiles table does not exist. Please run the database migration.')
-      return { data: null, error: { message: 'Profiles table not set up', code: 'TABLE_MISSING' } }
-    }
-    
-    // If profile doesn't exist and error is not "no rows", return the error
-    if (getError && !getError.message?.includes('No rows')) {
-      return { data: null, error: getError }
-    }
-    
-    // Create new profile
-    return await createProfile(userUuid)
-  } catch (error) {
-    console.warn('Profile operation failed:', error)
-    return { data: null, error }
-  }
+  const { data, error } = await supabase.rpc('get_or_create_profile', {
+    p_user_uuid: userUuid
+  })
+
+  // RPC returns an array, we want the first item or null
+  return { data: data && data.length > 0 ? data[0] : null, error }
 }

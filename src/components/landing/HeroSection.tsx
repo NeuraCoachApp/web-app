@@ -35,7 +35,7 @@ const HeroSection = () => {
 
           {/* Auth Button */}
           <a 
-            href={user ? "/dashboard" : "/auth"} 
+            href={user ? "/dashboard" : "/auth/signin"} 
             className="px-4 py-2 md:px-5 md:py-3 bg-white rounded-full shadow-xl backdrop-blur-sm text-black text-xs md:text-sm font-dm-mono font-medium uppercase tracking-wider-2 hover:bg-gray-100 hover:scale-105 hover:shadow-2xl transition-all duration-300 order-3"
           >
             {user ? "Go to Dashboard" : "Login / Sign Up"}

@@ -12,7 +12,7 @@ interface AuthContextType {
   loading: boolean
   signOut: () => Promise<void>
   signIn: (email: string, password: string) => Promise<{ error: any }>
-  signUp: (email: string, password: string) => Promise<{ error: any }>
+  signUp: (email: string, password: string) => Promise<{ error: any; wasSignedIn?: boolean }>
   resetPassword: (email: string) => Promise<{ error: any }>
   refreshProfile: () => Promise<void>
 }
@@ -178,6 +178,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         emailRedirectTo: undefined, // Disable email confirmation
       },
     })
+    
+    // If user already exists, try to sign them in instead
+    if (error) {
+      const isUserExists = error.code === 'user_already_exists' || 
+                          (error.message && error.message.toLowerCase().includes('user already registered'))
+      
+      if (isUserExists) {
+        const signInResult = await signIn(email, password)
+        if (!signInResult.error) {
+          return { error: null, wasSignedIn: true }
+        }
+        // If sign-in also fails, return original signup error
+        return { error }
+      }
+    }
+    
     return { error }
   }
 

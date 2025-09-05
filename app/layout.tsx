@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Inter, DM_Mono } from 'next/font/google'
 import { AuthProvider } from '@/src/contexts/AuthContext'
 import { CoachProvider } from '@/src/contexts/CoachContext'
+import { ThemeProvider } from '@/src/contexts/ThemeContext'
 import './globals.css'
 
 const inter = Inter({ 
@@ -31,11 +32,13 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.variable} ${dmMono.variable} font-inter`}>
-        <AuthProvider>
-          <CoachProvider>
-            {children}
-          </CoachProvider>
-        </AuthProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <CoachProvider>
+              {children}
+            </CoachProvider>
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   )

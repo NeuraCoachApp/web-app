@@ -4,11 +4,12 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '@/src/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import { Globe, Mail, Lock } from 'lucide-react'
+import Link from 'next/link'
+import Button from '@/src/components/ui/button'
 
-export default function AuthForm() {
-  const { signIn, signUp, user, loading: authLoading } = useAuth()
+export default function SignInForm() {
+  const { signIn, user, loading: authLoading } = useAuth()
   const router = useRouter()
-  const [isLogin, setIsLogin] = useState(true)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -21,33 +22,21 @@ export default function AuthForm() {
     }
   }, [user, authLoading, router])
 
-  const handleAuth = async (e: React.FormEvent) => {
+  const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setMessage('')
 
     try {
-      if (isLogin) {
-        const { error } = await signIn(email, password)
-        
-        if (error) throw error
-        
-        setMessage('Login successful! Redirecting...')
-        // Redirect to dashboard after successful login
-        setTimeout(() => {
-          router.push('/dashboard')
-        }, 1000)
-      } else {
-        const { error } = await signUp(email, password)
-        
-        if (error) throw error
-        
-        setMessage('Account created successfully! Redirecting...')
-        // Redirect to onboarding after successful signup
-        setTimeout(() => {
-          router.push('/onboarding')
-        }, 1000)
-      }
+      const { error } = await signIn(email, password)
+      
+      if (error) throw error
+      
+      setMessage('Login successful! Redirecting...')
+      // Redirect to dashboard after successful login
+      setTimeout(() => {
+        router.push('/dashboard')
+      }, 1000)
     } catch (error: any) {
       setMessage(error.message)
     } finally {
@@ -69,15 +58,15 @@ export default function AuthForm() {
             </div>
           </div>
           <h2 className="text-3xl font-inter font-bold text-foreground">
-            {isLogin ? 'Welcome back' : 'Create your account'}
+            Welcome back
           </h2>
           <p className="mt-2 text-muted-foreground">
-            {isLogin ? 'Sign in to your account' : 'Get started with AI coaching'}
+            Sign in to your account
           </p>
         </div>
 
         {/* Form */}
-        <form className="mt-8 space-y-6" onSubmit={handleAuth}>
+        <form className="mt-8 space-y-6" onSubmit={handleSignIn}>
           <div className="space-y-4">
             
             <div>
@@ -114,7 +103,7 @@ export default function AuthForm() {
                   id="password"
                   name="password"
                   type="password"
-                  autoComplete={isLogin ? 'current-password' : 'new-password'}
+                  autoComplete="current-password"
                   required
                   className="appearance-none relative block w-full px-3 py-3 pl-10 border border-border placeholder-muted-foreground text-foreground bg-background rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                   placeholder="Password"
@@ -126,33 +115,32 @@ export default function AuthForm() {
           </div>
 
           {message && (
-            <div className={`text-sm text-center p-3 rounded-lg ${
+            <div className={`text-sm text-center p-3 rounded-lg border ${
               message.includes('successful') || message.includes('email') 
-                ? 'bg-green-50 text-green-700 border border-green-200' 
-                : 'bg-red-50 text-red-700 border border-red-200'
+                ? 'bg-success/10 text-success border-success/20' 
+                : 'bg-error/10 text-error border-error/20'
             }`}>
               {message}
             </div>
           )}
 
           <div>
-            <button
+            <Button
               type="submit"
-              disabled={loading}
-              className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              loading={loading}
+              className="w-full"
             >
-              {loading ? 'Please wait...' : (isLogin ? 'Sign in' : 'Sign up')}
-            </button>
+              {loading ? 'Signing in...' : 'Sign in'}
+            </Button>
           </div>
 
           <div className="text-center">
-            <button
-              type="button"
+            <Link
+              href="/auth/signup"
               className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-              onClick={() => setIsLogin(!isLogin)}
             >
-              {isLogin ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
-            </button>
+              Don't have an account? Sign up
+            </Link>
           </div>
         </form>
       </div>
