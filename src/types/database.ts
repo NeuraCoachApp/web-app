@@ -56,6 +56,42 @@ export type Database = {
         }
         Relationships: []
       }
+      user_goal: {
+        Row: {
+          created_at: string
+          goal_uuid: string
+          id: number
+          user_uuid: string
+        }
+        Insert: {
+          created_at?: string
+          goal_uuid?: string
+          id?: number
+          user_uuid?: string
+        }
+        Update: {
+          created_at?: string
+          goal_uuid?: string
+          id?: number
+          user_uuid?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_goal_goal_uuid_fkey"
+            columns: ["goal_uuid"]
+            isOneToOne: false
+            referencedRelation: "goal"
+            referencedColumns: ["goal_uuid"]
+          },
+          {
+            foreignKeyName: "user_goal_user_uuid_fkey"
+            columns: ["user_uuid"]
+            isOneToOne: false
+            referencedRelation: "profile"
+            referencedColumns: ["user_uuid"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

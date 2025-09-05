@@ -3,12 +3,14 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/src/contexts/AuthContext'
 import { useCoach } from '@/src/contexts/CoachContext'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import AnimatedBlob from '@/src/components/ui/animated-blob'
 import VoiceInput from '@/src/components/ui/voice-input'
 import { motion, AnimatePresence } from 'framer-motion'
-import { updateProfile } from '@/src/lib/profile'
 import { useSpeechRecognition } from '@/src/lib/speech-recognition'
+import { useProfile, useUpdateProfile } from '@/src/hooks/useProfile'
+import { useCreateGoal } from '@/src/hooks/useGoals'
+import { useOnboardingStatus } from '@/src/hooks/useOnboarding'
 
 const onboardingSteps = [
   {
@@ -60,6 +62,12 @@ const onboardingSteps = [
     personality: "caring and attentive"
   },
   {
+    id: 'goal_setup',
+    text: "What would you like to work on?",
+    subtext: "Tell me your main goal or what you'd like to achieve.",
+    personality: "supportive and focused"
+  },
+  {
     id: 'notification_time',
     text: "What time would you like to receive daily notifications?",
     subtext: "",
@@ -86,7 +94,11 @@ const onboardingSteps = [
 ]
 
 export default function Onboarding() {
-  const { user, loading, refreshProfile } = useAuth()
+  const { user, loading } = useAuth()
+  const { data: profile } = useProfile(user?.id)
+  const { data: onboardingStatus } = useOnboardingStatus(user?.id)
+  const updateProfileMutation = useUpdateProfile()
+  const createGoalMutation = useCreateGoal()
   const { 
     isSpeaking, 
     isListening, 
@@ -96,20 +108,54 @@ export default function Onboarding() {
   } = useCoach()
   const { extractName } = useSpeechRecognition()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [currentStep, setCurrentStep] = useState(0)
   const [userName, setUserName] = useState('')
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [showInput, setShowInput] = useState(false)
   const [reason, setReason] = useState('')
+  const [goal, setGoal] = useState('')
   const [notificationTime, setNotificationTime] = useState('09:00')
   const [speechError, setSpeechError] = useState('')
+  const [onboardingChecked, setOnboardingChecked] = useState(false)
 
   useEffect(() => {
     if (!loading && !user) {
       router.push('/auth')
     }
   }, [user, loading, router])
+
+  // Check onboarding status and set starting step
+  useEffect(() => {
+    if (!user || loading || onboardingChecked || !onboardingStatus) return
+
+    // If no onboarding needed, redirect to dashboard
+    if (!onboardingStatus.shouldRedirectToOnboarding) {
+      router.push('/dashboard')
+      return
+    }
+
+    // Set starting step based on what's needed
+    if (onboardingStatus.onboardingStep === 'goal') {
+      // Skip to goal setup step (step 8 in the array)
+      const goalStepIndex = onboardingSteps.findIndex(step => step.id === 'goal_setup')
+      if (goalStepIndex !== -1) {
+        setCurrentStep(goalStepIndex)
+        // Pre-fill profile info if available
+        if (profile?.first_name) {
+          setFirstName(profile.first_name)
+          setUserName(profile.first_name + (profile.last_name ? ` ${profile.last_name}` : ''))
+        }
+        if (profile?.last_name) {
+          setLastName(profile.last_name)
+        }
+      }
+    }
+    // If onboardingStep is 'profile' or undefined, start from beginning (step 0)
+    
+    setOnboardingChecked(true)
+  }, [user, profile, loading, onboardingChecked, onboardingStatus, router])
 
   useEffect(() => {
     // Speak the current step text when it changes
@@ -129,7 +175,7 @@ export default function Onboarding() {
 
   useEffect(() => {
     // Auto-advance for some steps (skip input steps)
-    const inputSteps = [0, 7, 8] // welcome (name), questions_time (reason), notification_time
+    const inputSteps = [0, 7, 8, 9] // welcome (name), questions_time (reason), goal_setup, notification_time
     if (currentStep > 0 && !inputSteps.includes(currentStep)) {
       const timer = setTimeout(() => {
         if (currentStep < onboardingSteps.length - 1) {
@@ -168,11 +214,10 @@ export default function Onboarding() {
         // Save to profile if we have a user
         if (user && (nameResult.firstName || nameResult.lastName)) {
           try {
-            await updateProfile(user.id, {
-              first_name: nameResult.firstName || firstName || null,
-              last_name: nameResult.lastName || lastName || null
+            await updateProfileMutation.mutateAsync({
+              first_name: nameResult.firstName || firstName || "",
+              last_name: nameResult.lastName || lastName || ""
             })
-            await refreshProfile()
           } catch (error) {
             console.warn('Failed to save profile (database may not be set up):', error)
           }
@@ -198,11 +243,10 @@ export default function Onboarding() {
       // Save profile if we haven't already
       if (user && (firstName || lastName)) {
         try {
-          await updateProfile(user.id, {
-            first_name: firstName || null,
-            last_name: lastName || null
+          await updateProfileMutation.mutateAsync({
+            first_name: firstName || "",
+            last_name: lastName || ""
           })
-          await refreshProfile()
         } catch (error) {
           console.warn('Failed to save profile (database may not be set up):', error)
         }
@@ -212,8 +256,18 @@ export default function Onboarding() {
       setShowInput(false)
     } else if (currentStep === 7 && reason.trim()) {
       setCurrentStep(8)
-    } else if (currentStep === 8) {
+    } else if (currentStep === 8 && goal.trim()) {
+      // Save the goal
+      if (user && goal.trim()) {
+        try {
+          await createGoalMutation.mutateAsync(goal.trim())
+        } catch (error) {
+          console.warn('Failed to save goal:', error)
+        }
+      }
       setCurrentStep(9)
+    } else if (currentStep === 9) {
+      setCurrentStep(10)
     } else if (currentStep < onboardingSteps.length - 1) {
       setCurrentStep(currentStep + 1)
     } else {
@@ -368,8 +422,29 @@ export default function Onboarding() {
               </div>
             )}
 
-            {/* Notification Time Input */}
+            {/* Goal Input */}
             {currentStep === 8 && (
+              <div className="mt-8 space-y-4">
+                <textarea
+                  placeholder="What would you like to work on or achieve?"
+                  value={goal}
+                  onChange={(e) => setGoal(e.target.value)}
+                  rows={4}
+                  className="w-full max-w-md mx-auto block px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                  autoFocus
+                />
+                <button
+                  onClick={handleNext}
+                  disabled={!goal.trim()}
+                  className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Set Goal
+                </button>
+              </div>
+            )}
+
+            {/* Notification Time Input */}
+            {currentStep === 9 && (
               <div className="mt-8 space-y-4">
                 <div className="flex flex-col items-center space-y-4">
                   <input
@@ -389,7 +464,7 @@ export default function Onboarding() {
             )}
 
             {/* Auto-advance steps */}
-            {currentStep > 0 && currentStep !== 7 && currentStep !== 8 && currentStep !== onboardingSteps.length - 1 && (
+            {currentStep > 0 && currentStep !== 7 && currentStep !== 8 && currentStep !== 9 && currentStep !== onboardingSteps.length - 1 && (
               <div className="mt-8">
                 <div className="w-full bg-gray-700 rounded-full h-1">
                   <motion.div

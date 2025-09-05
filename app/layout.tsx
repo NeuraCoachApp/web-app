@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { Inter, DM_Mono } from 'next/font/google'
+import { QueryProvider } from '@/src/contexts/QueryProvider'
 import { AuthProvider } from '@/src/contexts/AuthContext'
 import { CoachProvider } from '@/src/contexts/CoachContext'
 import { ThemeProvider } from '@/src/contexts/ThemeContext'
@@ -32,13 +33,15 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.variable} ${dmMono.variable} font-inter`}>
-        <ThemeProvider>
-          <AuthProvider>
-            <CoachProvider>
-              {children}
-            </CoachProvider>
-          </AuthProvider>
-        </ThemeProvider>
+        <QueryProvider>
+          <ThemeProvider>
+            <AuthProvider>
+              <CoachProvider>
+                {children}
+              </CoachProvider>
+            </AuthProvider>
+          </ThemeProvider>
+        </QueryProvider>
       </body>
     </html>
   )

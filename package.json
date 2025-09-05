@@ -12,6 +12,8 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.0",
+    "@tanstack/react-query": "^5.86.0",
+    "@tanstack/react-query-devtools": "^5.86.0",
     "clsx": "^2.1.1",
     "framer-motion": "^10.16.16",
     "lucide-react": "^0.542.0",

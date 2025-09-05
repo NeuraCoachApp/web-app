@@ -2,19 +2,19 @@
 
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { User, Session, AuthChangeEvent } from '@supabase/supabase-js'
+import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/src/lib/supabase'
-import { Profile, getOrCreateProfile } from '@/src/lib/profile'
+import { Profile } from '@/src/hooks/useProfile'
+import { profileKeys } from '@/src/hooks/useProfile'
 
 interface AuthContextType {
   user: User | null
   session: Session | null
-  profile: Profile | null
   loading: boolean
   signOut: () => Promise<void>
   signIn: (email: string, password: string) => Promise<{ error: any }>
   signUp: (email: string, password: string) => Promise<{ error: any; wasSignedIn?: boolean }>
   resetPassword: (email: string) => Promise<{ error: any }>
-  refreshProfile: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -22,12 +22,11 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [session, setSession] = useState<Session | null>(null)
-  const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
 
   const loadStack = {
     sessionLoaded: useRef(false),
-    profileLoaded: useRef(false),
   }
 
   const checkLoadedState = () => {
@@ -35,29 +34,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(!allLoaded)
   }
 
-  const loadProfile = async (user: User) => {
-    try {
-      const { data: profileData, error } = await getOrCreateProfile(user.id)
-      if (error) {
-        console.warn('Profile loading failed (this is ok if profiles table not set up yet):', error)
-        setProfile(null)
-      } else {
-        setProfile(profileData)
-      }
-    } catch (error) {
-      console.warn('Profile loading error:', error)
-      setProfile(null)
-    } finally {
-      loadStack.profileLoaded.current = true
-      checkLoadedState()
-    }
-  }
-
-  const refreshProfile = async () => {
-    if (user) {
-      loadStack.profileLoaded.current = false
-      await loadProfile(user)
-    }
+  const invalidateUserData = (userId: string) => {
+    // Invalidate all user-related queries when auth changes
+    queryClient.invalidateQueries({ queryKey: profileKeys.user(userId) })
+    queryClient.invalidateQueries({ queryKey: ['goals', 'user', userId] })
+    queryClient.invalidateQueries({ queryKey: ['onboarding', 'status', userId] })
   }
 
   /**
@@ -82,7 +63,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!supabaseUrl || supabaseUrl.includes('placeholder')) {
           console.warn('Supabase not configured - auth will not work')
           loadStack.sessionLoaded.current = true
-          loadStack.profileLoaded.current = true
           checkLoadedState()
           return
         }
@@ -99,16 +79,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (session) {
           setSession(session)
           setUser(session.user)
-          // Load profile but don't let it block the auth flow
-          loadProfile(session.user)
-        } else {
-          loadStack.profileLoaded.current = true
-          checkLoadedState()
+          // Invalidate user data to trigger fresh fetches
+          invalidateUserData(session.user.id)
         }
+        
+        checkLoadedState()
       } catch (error) {
         console.error('Error getting session:', error)
         loadStack.sessionLoaded.current = true
-        loadStack.profileLoaded.current = true
         checkLoadedState()
       }
     }
@@ -122,16 +100,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(newSession?.user || null)
           
           if (newSession?.user) {
-            loadProfile(newSession.user)
+            // Invalidate user data for the new user
+            invalidateUserData(newSession.user.id)
           } else {
-            setProfile(null)
-            loadStack.profileLoaded.current = true
-            checkLoadedState()
+            // Clear all user data from cache on sign out
+            queryClient.clear()
           }
+          
+          checkLoadedState()
         }
       } catch (error) {
         console.error('Error in auth state change:', error)
-        loadStack.profileLoaded.current = true
         checkLoadedState()
       }
     }
@@ -148,7 +127,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut()
     setSession(null)
     setUser(null)
-    setProfile(null)
+    // Clear all cached data on sign out
+    queryClient.clear()
   }
 
   const signIn = async (email: string, password: string) => {
@@ -205,13 +185,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const value = {
     user,
     session,
-    profile,
     loading,
     signOut,
     signIn,
     signUp,
     resetPassword,
-    refreshProfile,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

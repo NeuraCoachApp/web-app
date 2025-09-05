@@ -4,10 +4,14 @@ import { useAuth } from '@/src/contexts/AuthContext'
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Globe, LogOut, User } from 'lucide-react'
+import { useProfile } from '@/src/hooks/useProfile'
+import { useOnboardingRedirect } from '@/src/hooks/useOnboarding'
 
 export default function Dashboard() {
-  const { user, profile, loading, signOut } = useAuth()
+  const { user, loading, signOut } = useAuth()
   const router = useRouter()
+  const { data: profile } = useProfile(user?.id)
+  const { shouldRedirect, isLoading: onboardingLoading } = useOnboardingRedirect()
 
   useEffect(() => {
     if (!loading && !user) {
@@ -15,7 +19,14 @@ export default function Dashboard() {
     }
   }, [user, loading, router])
 
-  if (loading) {
+  // Check if user needs onboarding
+  useEffect(() => {
+    if (!onboardingLoading && shouldRedirect) {
+      router.push('/onboarding')
+    }
+  }, [shouldRedirect, onboardingLoading, router])
+
+  if (loading || onboardingLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-foreground">Loading...</div>
