@@ -2,6 +2,7 @@
 
 import { motion } from 'framer-motion'
 import { useEffect, useState } from 'react'
+import AudioLevelIndicator from './audio-level-indicator'
 
 interface AnimatedBlobProps {
   isListening?: boolean
@@ -34,10 +35,8 @@ export default function AnimatedBlob({
       rotate: 0,
       borderRadius: "60% 40% 30% 70%/60% 30% 70% 40%",
       transition: {
-        duration: 4,
+        duration: 0.5,
         ease: "easeInOut",
-        repeat: Infinity,
-        repeatType: "reverse" as const,
       }
     },
     listening: {
@@ -73,6 +72,10 @@ export default function AnimatedBlob({
   const gradientVariants = {
     idle: {
       background: "linear-gradient(45deg, #667eea 0%, #764ba2 100%)",
+      transition: {
+        duration: 0.5,
+        ease: "easeInOut",
+      }
     },
     listening: {
       background: [
@@ -146,13 +149,23 @@ export default function AnimatedBlob({
             background: "linear-gradient(135deg, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0.1) 100%)",
           }}
           animate={{
-            scale: isSpeaking ? [1, 1.2, 1] : [1, 1.1, 1],
+            scale: isSpeaking ? [1, 1.2, 1] : isListening ? [1, 1.1, 1] : 1,
           }}
           transition={{
-            duration: isSpeaking ? 0.4 : 3,
-            repeat: Infinity,
+            duration: isSpeaking ? 0.4 : isListening ? 2 : 0.5,
+            repeat: (isSpeaking || isListening) ? Infinity : 0,
+            ease: "easeInOut"
           }}
         />
+
+        {/* Audio Level Indicator - positioned in center */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <AudioLevelIndicator 
+            isActive={isSpeaking || isListening} 
+            isSpeaking={isSpeaking}
+            lineCount={5}
+          />
+        </div>
       </motion.div>
     </div>
   )

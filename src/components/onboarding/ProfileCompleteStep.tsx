@@ -2,7 +2,7 @@
 
 import React from 'react'
 import { useRouter } from 'next/navigation'
-import { StepBase, StepText, StepButton } from './StepBase'
+import { FlowStep, FlowStepText, FlowStepButton } from '@/src/components/voice'
 import { useOnboardingContext } from './OnboardingProvider'
 
 export function ProfileCompleteStep() {
@@ -16,21 +16,17 @@ export function ProfileCompleteStep() {
   }
 
   return (
-    <StepBase>
-      <StepText 
-        title={getCurrentText()}
-        subtitle={currentStepData?.subtext}
-      />
-
+    <FlowStep>
+      {/* Text content will now only appear as captions after being spoken */}
+      
       <div className="mt-8">
-        <StepButton
+        <FlowStepButton
           onClick={handleContinue}
           variant="primary"
-          className="px-12 py-4"
         >
           Continue to Dashboard
-        </StepButton>
+        </FlowStepButton>
       </div>
-    </StepBase>
+    </FlowStep>
   )
 }

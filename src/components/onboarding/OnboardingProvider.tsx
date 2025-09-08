@@ -1,6 +1,6 @@
 'use client'
 
-import React, { createContext, useContext, useEffect } from 'react'
+import React, { createContext, useContext, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/src/contexts/AuthContext'
 import { useOnboardingFlow, OnboardingState, OnboardingStep, OnboardingStatus } from '@/src/hooks/useOnboarding'
@@ -20,6 +20,8 @@ interface OnboardingContextType {
   isLastStep: boolean
   profile: Profile | null | undefined
   onboardingStatus: OnboardingStatus | undefined
+  showIntro: boolean
+  startFlow: () => void
 }
 
 const OnboardingContext = createContext<OnboardingContextType | undefined>(undefined)
@@ -40,6 +42,7 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
   const { user, loading } = useAuth()
   const router = useRouter()
   const onboardingFlow = useOnboardingFlow()
+  const [showIntro, setShowIntro] = useState(true)
 
   // Redirect to auth if not authenticated
   useEffect(() => {
@@ -64,9 +67,13 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
     }
   }, [user, loading, onboardingFlow.state.onboardingChecked, onboardingFlow.onboardingStatus, router])
 
+  const startFlow = () => {
+    setShowIntro(false)
+  }
+
   // Auto-advance logic for non-input steps
   useEffect(() => {
-    if (onboardingFlow.shouldAutoAdvance()) {
+    if (!showIntro && onboardingFlow.shouldAutoAdvance()) {
       // Calculate speaking time based on the current step's text content
       const currentText = onboardingFlow.getCurrentText()
       const currentSubtext = onboardingFlow.currentStepData?.subtext
@@ -90,7 +97,7 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
       
       return () => clearTimeout(timer)
     }
-  }, [onboardingFlow, router])
+  }, [onboardingFlow, router, showIntro])
 
   if (loading) {
     return (
@@ -104,8 +111,14 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
     return null
   }
 
+  const contextValue = {
+    ...onboardingFlow,
+    showIntro,
+    startFlow
+  }
+
   return (
-    <OnboardingContext.Provider value={onboardingFlow}>
+    <OnboardingContext.Provider value={contextValue}>
       {children}
     </OnboardingContext.Provider>
   )

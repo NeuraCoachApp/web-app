@@ -2,7 +2,7 @@
 
 import React from 'react'
 import { motion } from 'framer-motion'
-import { GoalStepBase, GoalStepText } from './GoalStepBase'
+import { FlowStep, FlowStepText } from '@/src/components/voice'
 import { useGoalCreationContext } from './GoalCreationProvider'
 import { getCoachSpeakingTime } from '@/src/lib/speech-timing'
 
@@ -16,12 +16,9 @@ export function GoalTextOnlyStep() {
   const speakingTimeSeconds = speakingTimeMs / 1000
 
   return (
-    <GoalStepBase>
-      <GoalStepText 
-        title={currentText}
-        subtitle={currentSubtext}
-      />
-
+    <FlowStep>
+      {/* Text content will now only appear as captions after being spoken */}
+      
       {/* Progress bar for auto-advancing steps */}
       <div className="mt-8">
         <div className="w-full bg-gray-700 rounded-full h-1">
@@ -33,6 +30,6 @@ export function GoalTextOnlyStep() {
           />
         </div>
       </div>
-    </GoalStepBase>
+    </FlowStep>
   )
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import React, { createContext, useContext, useEffect } from 'react'
+import React, { createContext, useContext, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/src/contexts/AuthContext'
 import { useGoalCreationFlow, GoalCreationState, GoalCreationStep, GoalCreationStatus } from '@/src/hooks/goalCreation/useGoalCreation'
@@ -19,6 +19,8 @@ interface GoalCreationContextType {
   isLastStep: boolean
   profile: Profile | null | undefined
   goalCreationStatus: GoalCreationStatus | undefined
+  showIntro: boolean
+  startFlow: () => void
 }
 
 const GoalCreationContext = createContext<GoalCreationContextType | undefined>(undefined)
@@ -39,6 +41,7 @@ export function GoalCreationProvider({ children }: GoalCreationProviderProps) {
   const { user, loading } = useAuth()
   const router = useRouter()
   const goalCreationFlow = useGoalCreationFlow()
+  const [showIntro, setShowIntro] = useState(true)
 
   // Redirect to auth if not authenticated
   useEffect(() => {
@@ -63,9 +66,13 @@ export function GoalCreationProvider({ children }: GoalCreationProviderProps) {
     }
   }, [user, loading, goalCreationFlow.state.goalCreationChecked, goalCreationFlow.goalCreationStatus, router])
 
+  const startFlow = () => {
+    setShowIntro(false)
+  }
+
   // Auto-advance logic for non-input steps
   useEffect(() => {
-    if (goalCreationFlow.shouldAutoAdvance()) {
+    if (!showIntro && goalCreationFlow.shouldAutoAdvance()) {
       // Calculate speaking time based on the current step's text content
       const currentText = goalCreationFlow.getCurrentText()
       const currentSubtext = goalCreationFlow.currentStepData?.subtext
@@ -88,7 +95,7 @@ export function GoalCreationProvider({ children }: GoalCreationProviderProps) {
       
       return () => clearTimeout(timer)
     }
-  }, [goalCreationFlow, router])
+  }, [goalCreationFlow, router, showIntro])
 
   if (loading) {
     return (
@@ -102,8 +109,14 @@ export function GoalCreationProvider({ children }: GoalCreationProviderProps) {
     return null
   }
 
+  const contextValue = {
+    ...goalCreationFlow,
+    showIntro,
+    startFlow
+  }
+
   return (
-    <GoalCreationContext.Provider value={goalCreationFlow}>
+    <GoalCreationContext.Provider value={contextValue}>
       {children}
     </GoalCreationContext.Provider>
   )

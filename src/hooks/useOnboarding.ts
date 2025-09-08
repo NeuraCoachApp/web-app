@@ -37,8 +37,8 @@ export interface OnboardingState {
 export const onboardingSteps: OnboardingStep[] = [
   {
     id: 'welcome',
-    text: "Hi there, Welcome!",
-    subtext: "What is your name?",
+    text: "Hi there!",
+    subtext: "What's your name?",
     personality: "warm and welcoming"
   },
   {
