@@ -22,6 +22,25 @@ export function WelcomeStep() {
     }
   }
 
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    const isValidInput = isNameValid()
+    if (e.key === 'Enter' && isValidInput) {
+      e.preventDefault()
+      handleNext()
+    }
+  }
+
+  const isNameValid = () => {
+    // Check if typed input has at least 2 words
+    const typedWords = state.userName.trim().split(/\s+/)
+    const hasValidTypedName = typedWords.length >= 2 && typedWords.every(word => word.length > 0)
+    
+    // Check if voice recognition captured both first and last name
+    const hasValidVoiceName = state.firstName && state.lastName
+    
+    return hasValidTypedName || hasValidVoiceName
+  }
+
   const capturedInfo = (state.firstName || state.lastName) 
     ? `Captured: ${state.firstName} ${state.lastName}` 
     : undefined
@@ -35,8 +54,9 @@ export function WelcomeStep() {
           value={state.userName}
           onChange={handleInputChange}
           onVoiceTranscript={handleVoiceTranscript}
-          placeholder="Enter your name or use voice input"
-          voicePlaceholder="Say your name..."
+          onKeyDown={handleKeyPress}
+          placeholder="Enter your first and last name"
+          voicePlaceholder="Say your first and last name..."
           speechError={state.speechError}
           onError={(error) => updateState({ speechError: error })}
           capturedInfo={capturedInfo}
@@ -45,7 +65,7 @@ export function WelcomeStep() {
         
         <FlowStepButton
           onClick={handleNext}
-          disabled={!state.userName.trim() && !state.firstName}
+          disabled={!isNameValid()}
         >
           Continue
         </FlowStepButton>

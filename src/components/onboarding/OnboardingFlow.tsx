@@ -6,7 +6,6 @@ import { onboardingSteps } from '@/src/hooks/useOnboarding'
 import { useOnboardingContext } from './OnboardingProvider'
 import { useCoach } from '@/src/contexts/CoachContext'
 import { WelcomeStep } from './WelcomeStep'
-import { TextOnlyStep } from './TextOnlyStep'
 import { ProfileCompleteStep } from './ProfileCompleteStep'
 
 export function OnboardingFlow() {
@@ -28,7 +27,7 @@ export function OnboardingFlow() {
       case 'profile_complete':
         return <ProfileCompleteStep />
       default:
-        return <TextOnlyStep />
+        return <WelcomeStep />
     }
   }
 
@@ -54,7 +53,7 @@ export function OnboardingFlow() {
       totalSteps={onboardingSteps.length}
       getCurrentText={getCurrentText}
       currentStepData={currentStepData}
-      stepKey={`${state.currentStep}-${state.userName}`}
+      stepKey={`${state.currentStep}`}
     >
       {renderCurrentStep()}
     </FlowLayout>

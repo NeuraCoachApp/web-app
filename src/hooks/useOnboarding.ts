@@ -37,20 +37,14 @@ export interface OnboardingState {
 export const onboardingSteps: OnboardingStep[] = [
   {
     id: 'welcome',
-    text: "Hi there!",
-    subtext: "What's your name?",
+    text: "Hi there! What's your name?",
+    subtext: "",
     personality: "warm and welcoming"
   },
   {
-    id: 'greeting',
-    text: "Welcome ____!",
-    subtext: "My name is Ava and I'll be guiding you through a new journey.",
-    personality: "friendly and encouraging"
-  },
-  {
     id: 'profile_complete',
-    text: "Perfect! Your profile is now set up.",
-    subtext: "Welcome to NeuraCoach! Let's get started.",
+    text: "Perfect! Your profile is now set up. Welcome to NeuraCoach! Let's get started.",
+    subtext: "",
     personality: "encouraging and welcoming"
   }
 ]
@@ -141,7 +135,7 @@ export function useOnboardingRedirect() {
  * Utility function to get current step text with name replacements
  */
 export function getCurrentStepText(step: OnboardingStep, userName?: string, firstName?: string): string {
-  if (step.id === 'greeting' || step.id === 'final') {
+  if (step.id === 'final') {
     return step.text.replace('____', userName || firstName || 'there')
   }
   if (step.id === 'questions_time') {

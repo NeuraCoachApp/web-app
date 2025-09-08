@@ -106,34 +106,6 @@ export default function VoiceInput({
         )}
       </button>
 
-      {/* Real-time transcription display */}
-      <AnimatePresence>
-        {(isListening || transcript) && (
-          <motion.div
-            initial={{ opacity: 0, y: -10, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -10, scale: 0.95 }}
-            transition={{ duration: 0.2 }}
-            className="absolute top-full mt-2 left-0 right-0 bg-gray-800 border border-gray-600 rounded-lg p-3 shadow-lg z-10"
-          >
-            <div className="text-xs text-gray-400 mb-1">
-              {isListening ? 'Listening...' : 'Transcribed:'}
-            </div>
-            <div className="text-sm text-white min-h-[20px]">
-              {transcript || (isListening ? placeholder : '')}
-              {isListening && (
-                <motion.span
-                  animate={{ opacity: [1, 0] }}
-                  transition={{ duration: 1, repeat: Infinity }}
-                  className="ml-1 text-blue-400"
-                >
-                  ●
-                </motion.span>
-              )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   )
 }

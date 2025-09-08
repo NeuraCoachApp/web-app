@@ -9,6 +9,7 @@ interface FlowInputProps {
   value: string
   onChange: (value: string) => void
   onVoiceTranscript?: (transcript: string, isFinal: boolean) => Promise<void>
+  onKeyDown?: (e: React.KeyboardEvent) => void
   placeholder?: string
   voicePlaceholder?: string
   disabled?: boolean
@@ -26,6 +27,7 @@ export function FlowInput({
   value,
   onChange,
   onVoiceTranscript,
+  onKeyDown,
   placeholder = "Enter your response or use voice input",
   voicePlaceholder = "Say your response...",
   disabled = false,
@@ -51,6 +53,7 @@ export function FlowInput({
             placeholder={placeholder}
             value={value}
             onChange={(e) => onChange(e.target.value)}
+            onKeyDown={onKeyDown}
             rows={rows}
             disabled={disabled}
             autoFocus={autoFocus}
@@ -62,6 +65,7 @@ export function FlowInput({
             placeholder={placeholder}
             value={value}
             onChange={(e) => onChange(e.target.value)}
+            onKeyDown={onKeyDown}
             disabled={disabled}
             autoFocus={autoFocus}
             className={textInputClasses}

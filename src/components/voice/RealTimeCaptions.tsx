@@ -10,6 +10,7 @@ interface RealTimeCaptionsProps {
   className?: string
   showOnSpeaking?: boolean
   showProgress?: boolean
+  stepKey?: string | number
 }
 
 export function RealTimeCaptions({ 
@@ -17,30 +18,52 @@ export function RealTimeCaptions({
   subtext, 
   className = '',
   showOnSpeaking = true,
-  showProgress = true
+  showProgress = true,
+  stepKey
 }: RealTimeCaptionsProps) {
   const { isSpeaking, isPreparingSpeech, currentMessage, currentWordIndex } = useCoach()
   const [allWords, setAllWords] = useState<string[]>([])
   const [visibleWordCount, setVisibleWordCount] = useState(0)
   const [isVisible, setIsVisible] = useState(false)
+  const [lastStepKey, setLastStepKey] = useState<string | number | undefined>(stepKey)
 
-  // Initialize words when message starts
+  // Clear captions when step changes
   useEffect(() => {
-    if (isSpeaking && currentMessage && allWords.length === 0) {
-      const words = currentMessage.split(/(\s+)/).filter(part => part.length > 0)
-      setAllWords(words)
+    if (stepKey !== lastStepKey && lastStepKey !== undefined) {
+      // Step has changed - clear previous captions
+      setAllWords([])
       setVisibleWordCount(0)
-      setIsVisible(true)
+      setIsVisible(false)
+      setLastStepKey(stepKey)
       
-      // Add debug logging
       if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-        console.log(`Caption initialized with ${words.length} parts`)
+        console.log(`Step changed from ${lastStepKey} to ${stepKey} - clearing captions`)
       }
-    } else if (!isSpeaking && currentMessage === null) {
-      // Only clear when completely done (don't clear during pauses)
-      // Keep captions visible permanently - don't clear them
+    } else if (lastStepKey === undefined) {
+      // Initialize step key
+      setLastStepKey(stepKey)
     }
-  }, [isSpeaking, currentMessage, allWords.length])
+  }, [stepKey, lastStepKey])
+
+  // Initialize words when message starts or changes
+  useEffect(() => {
+    if (isSpeaking && currentMessage) {
+      const words = currentMessage.split(/(\s+)/).filter(part => part.length > 0)
+      
+      // Only reinitialize if it's a different message
+      if (allWords.length === 0 || allWords.join('') !== words.join('')) {
+        setAllWords(words)
+        setVisibleWordCount(0)
+        setIsVisible(true)
+        
+        // Add debug logging
+        if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+          console.log(`Caption initialized with ${words.length} parts: "${currentMessage}"`)
+        }
+      }
+    }
+    // Keep captions visible on the same step even when not actively speaking
+  }, [isSpeaking, currentMessage, allWords])
 
   // Update visible word count as words are spoken
   useEffect(() => {
@@ -105,10 +128,10 @@ export function RealTimeCaptions({
       return (
         <motion.span
           key={`${currentMessage}-${index}`} // Unique key per message and position
-          initial={{ opacity: 0 }}
+          initial={{ opacity: 0.5 }}
           animate={{ opacity: 1 }}
           transition={{ 
-            duration: 0.3,
+            duration: 0.1,
             delay: 0 // No stagger delay - each word appears when it should
           }}
           className={isWord ? "inline-block" : "inline"}
@@ -123,7 +146,7 @@ export function RealTimeCaptions({
     <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none z-10">
       <div className="max-w-2xl mx-auto px-6 py-3 text-center min-h-[60px] flex items-center justify-center">
         {isVisible && (
-          <div className={`text-gray-200 text-sm md:text-base leading-relaxed italic font-bold ${className}`}>
+          <div className={`text-gray-200 text-sm md:text-base leading-relaxed italic ${className}`}>
             {renderWords()}
           </div>
         )}

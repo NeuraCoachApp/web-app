@@ -1,6 +1,5 @@
 export { OnboardingProvider, useOnboardingContext } from './OnboardingProvider'
 export { OnboardingFlow } from './OnboardingFlow'
 export { WelcomeStep } from './WelcomeStep'
-export { TextOnlyStep } from './TextOnlyStep'
 export { ProfileCompleteStep } from './ProfileCompleteStep'
 export { StepBase, StepText, StepButton } from './StepBase'
