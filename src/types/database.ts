@@ -17,18 +17,81 @@ export type Database = {
       goal: {
         Row: {
           created_at: string
-          goal: string
-          goal_uuid: string
+          end_at: string
+          text: string
+          uuid: string
         }
         Insert: {
           created_at?: string
-          goal?: string
-          goal_uuid?: string
+          end_at?: string
+          text?: string
+          uuid?: string
         }
         Update: {
           created_at?: string
-          goal?: string
+          end_at?: string
+          text?: string
+          uuid?: string
+        }
+        Relationships: []
+      }
+      goal_steps: {
+        Row: {
+          goal_uuid: string
+          id: number
+          step_uuid: string
+        }
+        Insert: {
           goal_uuid?: string
+          id?: number
+          step_uuid?: string
+        }
+        Update: {
+          goal_uuid?: string
+          id?: number
+          step_uuid?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goal_steps_goal_uuid_fkey"
+            columns: ["goal_uuid"]
+            isOneToOne: false
+            referencedRelation: "goal"
+            referencedColumns: ["uuid"]
+          },
+          {
+            foreignKeyName: "goal_steps_step_uuid_fkey"
+            columns: ["step_uuid"]
+            isOneToOne: false
+            referencedRelation: "step"
+            referencedColumns: ["uuid"]
+          },
+        ]
+      }
+      insight: {
+        Row: {
+          created_at: string
+          effort_level: number
+          progress: number
+          stress_level: number
+          summary: string
+          uuid: string
+        }
+        Insert: {
+          created_at?: string
+          effort_level?: number
+          progress?: number
+          stress_level?: number
+          summary?: string
+          uuid?: string
+        }
+        Update: {
+          created_at?: string
+          effort_level?: number
+          progress?: number
+          stress_level?: number
+          summary?: string
+          uuid?: string
         }
         Relationships: []
       }
@@ -37,24 +100,108 @@ export type Database = {
           created_at: string
           first_name: string | null
           last_name: string | null
+          subscription_status: string | null
           updated_at: string
-          user_uuid: string
+          uuid: string
         }
         Insert: {
           created_at?: string
           first_name?: string | null
           last_name?: string | null
+          subscription_status?: string | null
           updated_at?: string
-          user_uuid: string
+          uuid: string
         }
         Update: {
           created_at?: string
           first_name?: string | null
           last_name?: string | null
+          subscription_status?: string | null
           updated_at?: string
-          user_uuid?: string
+          uuid?: string
         }
         Relationships: []
+      }
+      session: {
+        Row: {
+          created_at: string
+          goal_uuid: string
+          insight_uuid: string
+          user_uuid: string
+          uuid: string
+        }
+        Insert: {
+          created_at?: string
+          goal_uuid?: string
+          insight_uuid?: string
+          user_uuid?: string
+          uuid?: string
+        }
+        Update: {
+          created_at?: string
+          goal_uuid?: string
+          insight_uuid?: string
+          user_uuid?: string
+          uuid?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_goal_uuid_fkey"
+            columns: ["goal_uuid"]
+            isOneToOne: false
+            referencedRelation: "goal"
+            referencedColumns: ["uuid"]
+          },
+          {
+            foreignKeyName: "session_insight_uuid_fkey"
+            columns: ["insight_uuid"]
+            isOneToOne: false
+            referencedRelation: "insight"
+            referencedColumns: ["uuid"]
+          },
+          {
+            foreignKeyName: "session_user_uuid_fkey"
+            columns: ["user_uuid"]
+            isOneToOne: false
+            referencedRelation: "profile"
+            referencedColumns: ["uuid"]
+          },
+        ]
+      }
+      step: {
+        Row: {
+          created_at: string
+          end_at: string
+          isCompleted: boolean
+          next_step: string | null
+          text: string
+          uuid: string
+        }
+        Insert: {
+          created_at?: string
+          end_at?: string
+          isCompleted?: boolean
+          next_step?: string | null
+          text?: string
+          uuid?: string
+        }
+        Update: {
+          created_at?: string
+          end_at?: string
+          isCompleted?: boolean
+          next_step?: string | null
+          text?: string
+          uuid?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "step_next_step_fkey"
+            columns: ["next_step"]
+            isOneToOne: false
+            referencedRelation: "step"
+            referencedColumns: ["uuid"]
+          },
+        ]
       }
       user_goal: {
         Row: {
@@ -81,14 +228,14 @@ export type Database = {
             columns: ["goal_uuid"]
             isOneToOne: false
             referencedRelation: "goal"
-            referencedColumns: ["goal_uuid"]
+            referencedColumns: ["uuid"]
           },
           {
             foreignKeyName: "user_goal_user_uuid_fkey"
             columns: ["user_uuid"]
             isOneToOne: false
             referencedRelation: "profile"
-            referencedColumns: ["user_uuid"]
+            referencedColumns: ["uuid"]
           },
         ]
       }
@@ -107,24 +254,15 @@ export type Database = {
           user_uuid: string
         }[]
       }
-      get_or_create_profile: {
-        Args: { p_user_uuid: string }
-        Returns: {
-          created_at: string
-          first_name: string
-          last_name: string
-          updated_at: string
-          user_uuid: string
-        }[]
-      }
       get_profile: {
         Args: { p_user_uuid: string }
         Returns: {
           created_at: string
           first_name: string | null
           last_name: string | null
+          subscription_status: string | null
           updated_at: string
-          user_uuid: string
+          uuid: string
         }
       }
       update_profile: {

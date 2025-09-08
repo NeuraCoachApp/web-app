@@ -1,8 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
+import { useState, useCallback } from 'react'
 import { useAuth } from '@/src/contexts/AuthContext'
-import { useProfile, Profile } from './useProfile'
-import { goalsKeys } from './useGoals'
+import { useProfile, Profile, useUpdateProfile } from './useProfile'
+import { goalsKeys, useCreateGoal } from './useGoals'
 import { supabase } from '@/src/lib/supabase'
+import { useSpeechRecognition } from '@/src/lib/speech-recognition'
 
 export interface OnboardingStatus {
   needsProfileSetup: boolean
@@ -11,36 +13,59 @@ export interface OnboardingStatus {
   onboardingStep?: 'profile' | 'goal'
 }
 
+export interface OnboardingStep {
+  id: string
+  text: string
+  subtext: string
+  personality: string
+}
+
+export interface OnboardingState {
+  currentStep: number
+  userName: string
+  firstName: string
+  lastName: string
+  showInput: boolean
+  reason: string
+  goal: string
+  notificationTime: string
+  speechError: string
+  onboardingChecked: boolean
+}
+
+// Slim onboarding flow - only profile setup
+export const onboardingSteps: OnboardingStep[] = [
+  {
+    id: 'welcome',
+    text: "Hi there, Welcome!",
+    subtext: "What is your name?",
+    personality: "warm and welcoming"
+  },
+  {
+    id: 'greeting',
+    text: "Welcome ____!",
+    subtext: "My name is Ava and I'll be guiding you through a new journey.",
+    personality: "friendly and encouraging"
+  },
+  {
+    id: 'profile_complete',
+    text: "Perfect! Your profile is now set up.",
+    subtext: "Welcome to NeuraCoach! Let's get started.",
+    personality: "encouraging and welcoming"
+  }
+]
+
 // Query keys for React Query
 export const onboardingKeys = {
   all: ['onboarding'] as const,
   status: (userId: string) => [...onboardingKeys.all, 'status', userId] as const,
 }
 
-/**
- * Check if user has goals assigned
- */
-async function getUserGoals(userUuid: string): Promise<{ data: any[] | null; error: any }> {
-  try {
-    const { data, error } = await supabase
-      .from('user_goal')
-      .select('*')
-      .eq('user_uuid', userUuid)
-    
-    if (error) {
-      console.warn('Error fetching user goals:', error)
-      return { data: null, error }
-    }
-    
-    return { data, error: null }
-  } catch (error) {
-    console.warn('Error in getUserGoals:', error)
-    return { data: null, error }
-  }
-}
+// Note: getUserGoals function moved to useGoals.ts to avoid duplication
 
 /**
- * Check user's onboarding status based on profile and goals
+ * Check user's onboarding status based on profile only
+ * Goals are handled separately in goal creation flow
  */
 async function checkOnboardingStatus(
   userUuid: string, 
@@ -49,30 +74,18 @@ async function checkOnboardingStatus(
   // Check if profile has first_name and last_name
   const hasProfileInfo = profile?.first_name && profile?.last_name
   
-  // If no profile info, needs complete onboarding from the start
+  // If no profile info, needs profile onboarding (takes precedence)
   if (!hasProfileInfo) {
     return {
       needsProfileSetup: true,
-      needsGoalSetup: true,
+      needsGoalSetup: false, // Goals handled separately
       shouldRedirectToOnboarding: true,
       onboardingStep: 'profile'
     }
   }
   
-  // Check if user has goals
-  const { data: userGoals, error } = await getUserGoals(userUuid)
-  
-  // If error fetching goals or no goals, needs goal setup
-  if (error || !userGoals || userGoals.length === 0) {
-    return {
-      needsProfileSetup: false,
-      needsGoalSetup: true,
-      shouldRedirectToOnboarding: true,
-      onboardingStep: 'goal'
-    }
-  }
-  
-  // User has both profile info and goals - no onboarding needed
+  // Profile is complete - no onboarding needed
+  // Goal creation is handled separately
   return {
     needsProfileSetup: false,
     needsGoalSetup: false,
@@ -121,5 +134,212 @@ export function useOnboardingRedirect() {
     isLoading,
     error,
     status: onboardingStatus
+  }
+}
+
+/**
+ * Utility function to get current step text with name replacements
+ */
+export function getCurrentStepText(step: OnboardingStep, userName?: string, firstName?: string): string {
+  if (step.id === 'greeting' || step.id === 'final') {
+    return step.text.replace('____', userName || firstName || 'there')
+  }
+  if (step.id === 'questions_time') {
+    return step.text.replace('______', userName || firstName || 'friend')
+  }
+  return step.text
+}
+
+/**
+ * Main hook for managing onboarding flow state and actions
+ */
+export function useOnboardingFlow() {
+  const { user } = useAuth()
+  const { data: profile } = useProfile(user?.id)
+  const { data: onboardingStatus } = useOnboardingStatus(user?.id)
+  const updateProfileMutation = useUpdateProfile()
+  const createGoalMutation = useCreateGoal()
+  const { extractName } = useSpeechRecognition()
+
+  // State management
+  const [state, setState] = useState<OnboardingState>({
+    currentStep: 0,
+    userName: '',
+    firstName: '',
+    lastName: '',
+    showInput: false,
+    reason: '',
+    goal: '',
+    notificationTime: '09:00',
+    speechError: '',
+    onboardingChecked: false
+  })
+
+  // Initialize starting step based on onboarding status
+  const initializeStep = useCallback(() => {
+    if (!user || !onboardingStatus || state.onboardingChecked) return
+
+    // If no onboarding needed, don't initialize
+    if (!onboardingStatus.shouldRedirectToOnboarding) {
+      return
+    }
+
+    // Always start from beginning for profile setup (slim flow)
+    setState(prev => ({ 
+      ...prev, 
+      onboardingChecked: true,
+      firstName: profile?.first_name || '',
+      lastName: profile?.last_name || '',
+      userName: profile?.first_name ? 
+        profile.first_name + (profile.last_name ? ` ${profile.last_name}` : '') : ''
+    }))
+  }, [user, profile, onboardingStatus, state.onboardingChecked])
+
+  // Handle voice transcript for name input
+  const handleVoiceTranscript = useCallback(async (transcript: string, isFinal: boolean) => {
+    if (!isFinal) {
+      setState(prev => ({ ...prev, userName: transcript }))
+      return
+    }
+
+    setState(prev => ({ ...prev, speechError: '' }))
+    
+    try {
+      const nameResult = extractName(transcript)
+      if (nameResult.confidence > 0.3) {
+        const newFirstName = nameResult.firstName || state.firstName
+        const newLastName = nameResult.lastName || state.lastName
+        
+        setState(prev => ({
+          ...prev,
+          firstName: newFirstName,
+          lastName: newLastName,
+          userName: newFirstName + (newLastName ? ` ${newLastName}` : '')
+        }))
+        
+        // Save to profile if we have a user
+        if (user && (nameResult.firstName || nameResult.lastName)) {
+          try {
+            await updateProfileMutation.mutateAsync({
+              first_name: nameResult.firstName || state.firstName || null,
+              last_name: nameResult.lastName || state.lastName || null
+            })
+          } catch (error) {
+            console.warn('Failed to save profile (database may not be set up):', error)
+          }
+        }
+      } else {
+        setState(prev => ({
+          ...prev,
+          userName: transcript,
+          speechError: 'Could not extract first/last name, but kept your input.'
+        }))
+      }
+    } catch (error) {
+      console.error('Name extraction error:', error)
+      setState(prev => ({ ...prev, userName: transcript }))
+    }
+  }, [user, state.firstName, state.lastName, extractName, updateProfileMutation])
+
+  // Handle next step logic for slim profile flow
+  const handleNext = useCallback(async () => {
+    if (state.currentStep === 0 && (state.userName.trim() || (state.firstName && state.firstName.trim()))) {
+      // Process name input
+      if (state.firstName && !state.userName.trim()) {
+        setState(prev => ({
+          ...prev,
+          userName: state.firstName + (state.lastName ? ` ${state.lastName}` : '')
+        }))
+      }
+      
+      let finalFirstName: string | null = state.firstName
+      let finalLastName: string | null = state.lastName
+      
+      // Extract names from manual input if needed
+      if (state.userName.trim() && !state.firstName && !state.lastName) {
+        const nameParts = state.userName.trim().split(/\s+/)
+        if (nameParts.length >= 1) {
+          finalFirstName = nameParts[0]
+          setState(prev => ({ ...prev, firstName: nameParts[0] }))
+        }
+        if (nameParts.length >= 2) {
+          finalLastName = nameParts.slice(1).join(' ')
+          setState(prev => ({ ...prev, lastName: nameParts.slice(1).join(' ') }))
+        }
+        
+        // Try AI extraction for complex patterns
+        if (nameParts.length === 1 && (state.userName.toLowerCase().includes('name is') || 
+            state.userName.toLowerCase().includes('i am') || state.userName.toLowerCase().includes("i'm"))) {
+          try {
+            const nameResult = extractName(state.userName.trim())
+            if (nameResult.confidence > 0.3 && nameResult.firstName !== nameParts[0]) {
+              finalFirstName = nameResult.firstName || null
+              finalLastName = nameResult.lastName || null
+              setState(prev => ({
+                ...prev,
+                firstName: nameResult.firstName || '',
+                lastName: nameResult.lastName || ''
+              }))
+            }
+          } catch (error) {
+            console.warn('Failed to extract name from manual input:', error)
+          }
+        }
+      }
+      
+      // Save profile and wait for completion
+      if (user && (finalFirstName || finalLastName)) {
+        try {
+          await updateProfileMutation.mutateAsync({
+            first_name: finalFirstName || null,
+            last_name: finalLastName || null
+          })
+          // Wait a bit for cache invalidation to propagate
+          await new Promise(resolve => setTimeout(resolve, 100))
+        } catch (error) {
+          console.warn('Failed to save profile (database may not be set up):', error)
+        }
+      }
+      
+      setState(prev => ({ ...prev, currentStep: 1, showInput: false }))
+    } else if (state.currentStep < onboardingSteps.length - 1) {
+      setState(prev => ({ ...prev, currentStep: state.currentStep + 1 }))
+    }
+    // Final step (profile_complete) will be handled by navigation to goal creation
+  }, [state, user, extractName, updateProfileMutation])
+
+  // Auto-advance for non-input steps (slim flow)
+  const shouldAutoAdvance = useCallback(() => {
+    const inputSteps = [0] // Only welcome step requires input in slim flow
+    return state.currentStep > 0 && !inputSteps.includes(state.currentStep)
+  }, [state.currentStep])
+
+  // Update state functions
+  const updateState = useCallback((updates: Partial<OnboardingState>) => {
+    setState(prev => ({ ...prev, ...updates }))
+  }, [])
+
+  const setCurrentStep = useCallback((step: number) => {
+    setState(prev => ({ ...prev, currentStep: step }))
+  }, [])
+
+  return {
+    state,
+    updateState,
+    setCurrentStep,
+    initializeStep,
+    handleVoiceTranscript,
+    handleNext,
+    shouldAutoAdvance,
+    getCurrentText: () => getCurrentStepText(
+      onboardingSteps[state.currentStep], 
+      state.userName, 
+      state.firstName
+    ),
+    currentStepData: onboardingSteps[state.currentStep],
+    isInputStep: [0].includes(state.currentStep), // Only welcome step in slim flow
+    isLastStep: state.currentStep === onboardingSteps.length - 1,
+    profile,
+    onboardingStatus
   }
 }

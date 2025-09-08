@@ -1,13 +1,14 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/src/contexts/AuthContext'
 import { supabase } from '@/src/lib/supabase'
+import { onboardingKeys } from './useOnboarding'
 import { Tables, TablesUpdate } from '@/src/types/database'
 
 // Use the generated database types
 export type Profile = Tables<'profile'>
 export type ProfileUpdate = {
-  first_name: string
-  last_name: string
+  first_name?: string | null
+  last_name?: string | null
 }
 
 // Query keys for React Query
@@ -20,26 +21,30 @@ export const profileKeys = {
  * Get or create a profile for a user
  */
 async function getOrCreateProfile(userUuid: string): Promise<{ data: Profile | null; error: any }> {
-  const { data, error } = await supabase.rpc('get_or_create_profile', {
+  // Use get_profile RPC which returns full profile data
+  const { data, error } = await supabase.rpc('get_profile', {
     p_user_uuid: userUuid
   })
 
-  // RPC returns an array, we want the first item or null
-  return { data: data && data.length > 0 ? data[0] : null, error }
+  // RPC returns a single object or null
+  return { data, error }
 }
 
 /**
  * Update a user's profile
  */
 async function updateProfile(userUuid: string, updates: ProfileUpdate): Promise<{ data: Profile | null; error: any }> {
-  const { data, error } = await supabase.rpc('update_profile', {
+  // First update using the RPC function
+  const { error: updateError } = await supabase.rpc('update_profile', {
     p_user_uuid: userUuid,
-    p_first_name: updates.first_name,
-    p_last_name: updates.last_name
+    p_first_name: updates.first_name || undefined,
+    p_last_name: updates.last_name || undefined
   })
 
-  // RPC returns an array, we want the first item or null
-  return { data: data && data.length > 0 ? data[0] : null, error }
+  if (updateError) return { data: null, error: updateError }
+
+  // Then fetch the full profile data
+  return getOrCreateProfile(userUuid)
 }
 
 /**
@@ -84,6 +89,9 @@ export function useUpdateProfile() {
         
         // Also invalidate to ensure fresh data on next fetch
         queryClient.invalidateQueries({ queryKey: profileKeys.user(user.id) })
+        
+        // Invalidate onboarding status since it depends on profile data
+        queryClient.invalidateQueries({ queryKey: onboardingKeys.status(user.id) })
       }
     },
     onError: (error) => {

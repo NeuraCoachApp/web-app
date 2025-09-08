@@ -1,6 +1,22 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/src/contexts/AuthContext'
 import { supabase } from '@/src/lib/supabase'
+import { onboardingKeys } from './useOnboarding'
+import { goalCreationKeys } from './goalCreation/useGoalCreation'
+import { Tables } from '@/src/types/database'
+import { getMockSessions } from '@/src/lib/mock-data'
+
+type UserGoal = Tables<'user_goal'>
+type Goal = Tables<'goal'>
+type Step = Tables<'step'>
+type Session = Tables<'session'>
+type Insight = Tables<'insight'>
+
+export interface SessionWithGoalAndInsight {
+  goal: Goal
+  insight: Insight
+  created_at: string
+}
 
 // Query keys for React Query
 export const goalsKeys = {
@@ -8,10 +24,15 @@ export const goalsKeys = {
   user: (userId: string) => [...goalsKeys.all, 'user', userId] as const,
 }
 
+export const sessionsKeys = {
+  all: ['sessions'] as const,
+  user: (userId: string) => [...sessionsKeys.all, 'user', userId] as const,
+}
+
 /**
  * Check if user has goals assigned
  */
-async function getUserGoals(userUuid: string): Promise<{ data: any[] | null; error: any }> {
+async function getUserGoals(userUuid: string): Promise<{ data: UserGoal[] | null; error: any }> {
   try {
     const { data, error } = await supabase
       .from('user_goal')
@@ -33,12 +54,13 @@ async function getUserGoals(userUuid: string): Promise<{ data: any[] | null; err
 /**
  * Create a goal entry
  */
-async function createGoal(goalText: string): Promise<{ data: any | null; error: any }> {
+async function createGoal(goalText: string, endAt?: string): Promise<{ data: Goal | null; error: any }> {
   try {
     const { data, error } = await supabase
       .from('goal')
       .insert({
-        goal: goalText
+        text: goalText,
+        end_at: endAt || new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString() // Default to 90 days from now
       })
       .select()
       .single()
@@ -53,7 +75,7 @@ async function createGoal(goalText: string): Promise<{ data: any | null; error: 
 /**
  * Assign a goal to a user
  */
-async function assignGoalToUser(userUuid: string, goalUuid: string): Promise<{ data: any | null; error: any }> {
+async function assignGoalToUser(userUuid: string, goalUuid: string): Promise<{ data: UserGoal | null; error: any }> {
   try {
     const { data, error } = await supabase
       .from('user_goal')
@@ -74,18 +96,90 @@ async function assignGoalToUser(userUuid: string, goalUuid: string): Promise<{ d
 /**
  * Create a goal and assign it to a user
  */
-async function createAndAssignGoal(userUuid: string, goalText: string): Promise<{ data: any | null; error: any }> {
+async function createAndAssignGoal(userUuid: string, goalText: string, endAt?: string): Promise<{ data: { goal: Goal; userGoal: UserGoal } | null; error: any }> {
   // First create the goal
-  const { data: goal, error: goalError } = await createGoal(goalText)
+  const { data: goal, error: goalError } = await createGoal(goalText, endAt)
   
   if (goalError || !goal) {
     return { data: null, error: goalError }
   }
   
   // Then assign it to the user
-  const { data: userGoal, error: assignError } = await assignGoalToUser(userUuid, goal.goal_uuid)
+  const { data: userGoal, error: assignError } = await assignGoalToUser(userUuid, goal.uuid)
   
-  return { data: { goal, userGoal }, error: assignError }
+  if (assignError || !userGoal) {
+    return { data: null, error: assignError }
+  }
+  
+  return { data: { goal, userGoal }, error: null }
+}
+
+/**
+ * Fetch all user sessions with their related goal and insight data
+ */
+async function getUserSessions(userUuid: string): Promise<{ data: SessionWithGoalAndInsight[] | null; error: any }> {
+  try {
+    console.log('📊 [getUserSessions] Starting fetch for user:', userUuid)
+    
+    const { data: sessions, error: sessionsError } = await supabase
+      .from('session')
+      .select(`
+        created_at,
+        goal:goal_uuid (
+          uuid,
+          text,
+          created_at,
+          end_at
+        ),
+        insight:insight_uuid (
+          uuid,
+          summary,
+          progress,
+          effort_level,
+          stress_level,
+          created_at
+        )
+      `)
+      .eq('user_uuid', userUuid)
+      .order('created_at', { ascending: true })
+    
+    console.log('📊 [getUserSessions] Sessions query result:', { sessions, sessionsError })
+    console.log('📊 [getUserSessions] Raw sessions data:', JSON.stringify(sessions, null, 2))
+    
+    if (sessionsError) {
+      console.warn('❌ Error fetching user sessions:', sessionsError)
+      return { data: null, error: sessionsError }
+    }
+
+    if (!sessions || sessions.length === 0) {
+      console.log('📭 No sessions found for user')
+      
+      // Debug: Try a simple query to see if sessions exist at all
+      const { data: debugSessions, error: debugError } = await supabase
+        .from('session')
+        .select('*')
+        .eq('user_uuid', userUuid)
+      
+      console.log('🔍 [getUserSessions] Debug simple query:', { debugSessions, debugError })
+      
+      return { data: [], error: null }
+    }
+
+    // Filter and structure the data
+    const structuredSessions: SessionWithGoalAndInsight[] = sessions
+      .filter(session => session.goal && session.insight)
+      .map(session => ({
+        goal: session.goal as Goal,
+        insight: session.insight as Insight,
+        created_at: session.created_at
+      }))
+    
+    console.log(`✅ [getUserSessions] Successfully processed ${structuredSessions.length} sessions`)
+    return { data: structuredSessions, error: null }
+  } catch (error) {
+    console.warn('❌ Error in getUserSessions:', error)
+    return { data: null, error }
+  }
 }
 
 /**
@@ -95,12 +189,56 @@ export function useUserGoals(userId?: string) {
   return useQuery({
     queryKey: goalsKeys.user(userId || ''),
     queryFn: async () => {
-      if (!userId) return null
-      const { data, error } = await getUserGoals(userId)
-      if (error) {
-        console.warn('Error fetching user goals:', error)
+      if (!userId) {
+        console.log('🎯 [useUserGoals] No user ID provided')
         return null
       }
+      
+      console.log('🎯 [useUserGoals] Fetching goals for user:', userId)
+      const { data, error } = await getUserGoals(userId)
+      
+      if (error) {
+        console.warn('❌ [useUserGoals] Error fetching user goals:', error)
+        return null
+      }
+      
+      console.log('✅ [useUserGoals] Successfully fetched goals:', { userId, goalCount: data?.length || 0, data })
+      return data
+    },
+    enabled: !!userId,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes
+  })
+}
+
+/**
+ * Hook to fetch user's sessions with goal and insight data
+ */
+export function useSessions(userId?: string) {
+  return useQuery({
+    queryKey: sessionsKeys.user(userId || ''),
+    queryFn: async () => {
+      if (!userId) {
+        console.log('📊 [useSessions] No user ID provided')
+        return null
+      }
+      
+      // First check for mock data
+      const mockSessions = getMockSessions(userId)
+      if (mockSessions.length > 0) {
+        console.log('🎭 [useSessions] Using mock sessions:', { userId, sessionCount: mockSessions.length })
+        return mockSessions
+      }
+      
+      console.log('📊 [useSessions] Fetching real sessions for user:', userId)
+      const { data, error } = await getUserSessions(userId)
+      
+      if (error) {
+        console.warn('❌ [useSessions] Error fetching sessions:', error)
+        return null
+      }
+      
+      console.log('✅ [useSessions] Successfully fetched sessions:', { userId, sessionCount: data?.length || 0, data })
       return data
     },
     enabled: !!userId,
@@ -117,9 +255,9 @@ export function useCreateGoal() {
   const { user } = useAuth()
 
   return useMutation({
-    mutationFn: async (goalText: string) => {
+    mutationFn: async ({ goalText, endAt }: { goalText: string; endAt?: string }) => {
       if (!user) throw new Error('No user found')
-      const { data, error } = await createAndAssignGoal(user.id, goalText)
+      const { data, error } = await createAndAssignGoal(user.id, goalText, endAt)
       if (error) throw error
       return data
     },
@@ -128,8 +266,14 @@ export function useCreateGoal() {
         // Invalidate user goals to refetch fresh data
         queryClient.invalidateQueries({ queryKey: goalsKeys.user(user.id) })
         
+        // Invalidate sessions data
+        queryClient.invalidateQueries({ queryKey: sessionsKeys.user(user.id) })
+        
         // Also invalidate onboarding status since it depends on goals
-        queryClient.invalidateQueries({ queryKey: ['onboarding-status', user.id] })
+        queryClient.invalidateQueries({ queryKey: onboardingKeys.status(user.id) })
+        
+        // Invalidate goal creation status since user now has goals
+        queryClient.invalidateQueries({ queryKey: goalCreationKeys.status(user.id) })
       }
     },
     onError: (error) => {

@@ -1,17 +1,35 @@
 'use client'
 
 import { useAuth } from '@/src/contexts/AuthContext'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Globe, LogOut, User } from 'lucide-react'
+import { Globe, LogOut, User, RefreshCw } from 'lucide-react'
 import { useProfile } from '@/src/hooks/useProfile'
 import { useOnboardingRedirect } from '@/src/hooks/useOnboarding'
+import { useUserGoals, useSessions, goalsKeys, sessionsKeys } from '@/src/hooks/useGoals'
+import GoalTimeline from '@/src/components/dashboard/GoalTimeline'
+import GoalInsights from '@/src/components/dashboard/GoalInsights'
+import GoalCalendar from '@/src/components/dashboard/GoalCalendar'
+import MockDataGenerator from '@/src/components/dev/MockDataGenerator'
+import LoadingSpinner from '@/src/components/ui/loading-spinner'
+import { useQueryClient } from '@tanstack/react-query'
+import { getMockGoals, sortStepsByNextStep } from '@/src/lib/mock-data'
 
 export default function Dashboard() {
   const { user, loading, signOut } = useAuth()
+  const queryClient = useQueryClient()
   const router = useRouter()
   const { data: profile } = useProfile(user?.id)
-  const { shouldRedirect, isLoading: onboardingLoading } = useOnboardingRedirect()
+  const { shouldRedirect: shouldRedirectToOnboarding, isLoading: onboardingLoading } = useOnboardingRedirect()
+  const { data: userGoals, isLoading: goalsLoading } = useUserGoals(user?.id)
+  const { data: sessions, isLoading: sessionsLoading } = useSessions(user?.id)
+  
+  // Get mock goals if available
+  const mockGoals = user?.id ? getMockGoals(user.id) : []
+  
+  // Track currently selected goal for insights
+  const [selectedGoalIndex, setSelectedGoalIndex] = useState(0)
+  const selectedGoal = mockGoals && mockGoals.length > 0 ? mockGoals[selectedGoalIndex] : null
 
   useEffect(() => {
     if (!loading && !user) {
@@ -21,15 +39,16 @@ export default function Dashboard() {
 
   // Check if user needs onboarding
   useEffect(() => {
-    if (!onboardingLoading && shouldRedirect) {
+    if (!onboardingLoading && shouldRedirectToOnboarding) {
       router.push('/onboarding')
     }
-  }, [shouldRedirect, onboardingLoading, router])
+  }, [shouldRedirectToOnboarding, onboardingLoading, router])
 
-  if (loading || onboardingLoading) {
+  // Show full loading only for critical auth/onboarding checks
+  if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-foreground">Loading...</div>
+        <LoadingSpinner size="lg" className="text-primary" />
       </div>
     )
   }
@@ -41,6 +60,15 @@ export default function Dashboard() {
   const handleSignOut = async () => {
     await signOut()
     router.push('/')
+  }
+
+  const handleRefreshData = async () => {
+    if (!user?.id) return
+    
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: goalsKeys.user(user.id) }),
+      queryClient.invalidateQueries({ queryKey: sessionsKeys.user(user.id) })
+    ])
   }
 
   return (
@@ -75,55 +103,101 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-inter font-bold text-foreground mb-2">
-            Welcome back, {
-              profile?.first_name 
-                ? `${profile.first_name}${profile.last_name ? ` ${profile.last_name}` : ''}!`
-                : user.user_metadata?.full_name || user.email
-            }!
-          </h1>
-          <p className="text-lg text-muted-foreground">
-            Your AI coaching dashboard is ready.
-          </p>
-          {profile && (profile.first_name || profile.last_name) && (
-            <p className="text-sm text-muted-foreground mt-2">
-              Profile: {profile.first_name || 'No first name'} {profile.last_name || 'No last name'}
-            </p>
+      {/* Goal Timeline - Full Width with no margins */}
+      <div className="bg-card">
+        {goalsLoading ? (
+          <div className="flex items-center justify-center py-32">
+            <div className="flex flex-col items-center gap-4">
+              <LoadingSpinner size="lg" className="text-primary" />
+              <div className="text-muted-foreground text-sm">Loading your goals...</div>
+            </div>
+          </div>
+        ) : (
+          <GoalTimeline 
+            goals={mockGoals} 
+            selectedGoalIndex={selectedGoalIndex}
+            onGoalChange={setSelectedGoalIndex}
+            onStepClick={(step) => {
+              console.log('Step clicked:', step.text, 'Sessions:', step.sessions.length)
+            }}
+          />
+        )}
+      </div>
+
+      {/* Goal Calendar - Progress tracking */}
+      <div className="bg-background border-t border-border">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {sessionsLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="flex flex-col items-center gap-4">
+                <LoadingSpinner size="md" className="text-primary" />
+                <div className="text-muted-foreground text-sm">Loading calendar...</div>
+              </div>
+            </div>
+          ) : (
+            <GoalCalendar goal={selectedGoal} />
           )}
         </div>
+      </div>
 
-        {/* Dashboard Content */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <div className="bg-card rounded-lg border border-border p-6">
-            <h3 className="text-lg font-inter font-semibold text-card-foreground mb-2">
-              Daily Check-ins
-            </h3>
-            <p className="text-muted-foreground text-sm">
-              Track your daily progress with AI-powered voice check-ins.
-            </p>
+      {/* Goal Insights - Full Width with no margins */}
+      <div className="bg-background border-t border-border">
+        {sessionsLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="flex flex-col items-center gap-4">
+              <LoadingSpinner size="md" className="text-primary" />
+              <div className="text-muted-foreground text-sm">Loading insights...</div>
+            </div>
           </div>
+        ) : (
+          <GoalInsights goal={selectedGoal} />
+        )}
+      </div>
 
-          <div className="bg-card rounded-lg border border-border p-6">
-            <h3 className="text-lg font-inter font-semibold text-card-foreground mb-2">
-              Weekly Coaching
+      {/* Resume container with margins */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Development Tools - Only show in development */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="mb-8">
+            <h3 className="text-lg font-inter font-semibold text-foreground mb-4">
+              Development Tools
             </h3>
-            <p className="text-muted-foreground text-sm">
-              Schedule and manage your sessions with your human coach.
-            </p>
+            <div className="space-y-4">
+              <MockDataGenerator />
+              
+              {/* Debug Info */}
+              <div className="bg-background border border-border rounded-lg p-4">
+                <div className="flex justify-between items-center mb-2">
+                  <h4 className="font-medium">Debug Info</h4>
+                  <button
+                    onClick={handleRefreshData}
+                    className="flex items-center gap-1 px-2 py-1 text-xs bg-primary text-primary-foreground 
+                             rounded hover:bg-primary/90 transition-colors"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    Refresh
+                  </button>
+                </div>
+                <div className="text-sm text-muted-foreground space-y-1">
+                  <p>Goals Loading: {goalsLoading ? '⏳ Loading...' : '✅ Loaded'}</p>
+                  <p>Sessions Loading: {sessionsLoading ? '⏳ Loading...' : '✅ Loaded'}</p>
+                  <p>Onboarding Check: {onboardingLoading ? '⏳ Loading...' : '✅ Loaded'}</p>
+                  <p>Mock Goals: {mockGoals.length > 0 ? `✅ ${mockGoals.length} Available` : '❌ None'}</p>
+                  <p>User ID: {user?.id || 'None'}</p>
+                  {mockGoals.length > 0 && (
+                    <div>
+                      <p>Current Goal: {mockGoals[0]?.text.substring(0, 30)}...</p>
+                      <p>Total Steps: {mockGoals.reduce((acc, goal) => acc + goal.steps.length, 0)}</p>
+                      <p>Goals: {mockGoals.map((g, i) => `${i + 1}.${g.text.substring(0, 15)}...`).join(' | ')}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
-
-          <div className="bg-card rounded-lg border border-border p-6">
-            <h3 className="text-lg font-inter font-semibold text-card-foreground mb-2">
-              Progress Insights
-            </h3>
-            <p className="text-muted-foreground text-sm">
-              View your coaching journey and goal achievements.
-            </p>
-          </div>
-        </div>
+        )}
+        
+        {/* Future sections can go here */}
       </div>
     </main>
   )
