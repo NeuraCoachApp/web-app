@@ -1,11 +1,11 @@
 'use client'
 
 import React from 'react'
-import { GoalWithStepsAndSessions } from '@/src/lib/mock-data'
+import { Goal } from '@/src/classes/Goal'
 import { Calendar, CheckCircle, AlertCircle, XCircle } from 'lucide-react'
 
 interface GoalCalendarProps {
-  goal: GoalWithStepsAndSessions | null
+  goal: Goal | null
 }
 
 interface DayProgress {
@@ -25,17 +25,14 @@ function getDateString(date: Date): string {
   return date.toISOString().split('T')[0] // YYYY-MM-DD format
 }
 
-function isStepCompleted(step: any): boolean {
-  // A step is completed if it has at least one session with 100% progress
-  return step.sessions.some((session: any) => session.insight.progress === 100)
-}
+// This function is no longer needed as we use step.isCompleted() method
 
-function calculateDayProgress(goal: GoalWithStepsAndSessions, date: Date): DayProgress {
+function calculateDayProgress(goal: Goal, date: Date): DayProgress {
   const dateStr = getDateString(date)
   
   // Get steps that had sessions on this specific date
-  const stepsWorkedOnToday = goal.steps.filter(step => 
-    step.sessions.some(session => {
+  const stepsWorkedOnToday = goal.getSteps().filter(step => 
+    step.getSessions().some(session => {
       const sessionDate = new Date(session.created_at).toISOString().split('T')[0]
       return sessionDate === dateStr
     })
@@ -43,9 +40,10 @@ function calculateDayProgress(goal: GoalWithStepsAndSessions, date: Date): DayPr
   
   // Get steps that were completed on this day (had a 100% progress session on this day)
   const stepsCompletedToday = stepsWorkedOnToday.filter(step => {
-    return step.sessions.some(session => {
+    return step.getSessions().some(session => {
       const sessionDate = new Date(session.created_at).toISOString().split('T')[0]
-      return sessionDate === dateStr && session.insight.progress === 100
+      const insight = session.getInsight()
+      return sessionDate === dateStr && insight && insight.progress === 100
     })
   })
   

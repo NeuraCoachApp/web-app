@@ -1,13 +1,8 @@
 import { supabase } from './supabase'
 import { Tables } from '@/src/types/database'
+import { Goal, Step, Session, Insight } from '@/src/classes'
 import { SessionWithGoalAndInsight } from '@/src/hooks/useGoals'
 
-type Goal = Tables<'goal'>
-type Step = Tables<'step'>
-type Session = Tables<'session'>
-type Insight = Tables<'insight'>
-type UserGoal = Tables<'user_goal'>
-type GoalSteps = Tables<'goal_steps'>
 
 // Sample goal and step data - Each step is a binary yes/no action
 const SAMPLE_GOALS = [
@@ -125,37 +120,6 @@ function randomDateWithinDays(days: number): string {
 }
 
 /**
- * Generate mock insight data
- */
-function generateMockInsight(): Omit<Insight, 'uuid' | 'created_at'> {
-  return {
-    summary: INSIGHT_SUMMARIES[Math.floor(Math.random() * INSIGHT_SUMMARIES.length)],
-    progress: randomBetween(10, 95),
-    effort_level: randomBetween(3, 10),
-    stress_level: randomBetween(1, 7)
-  }
-}
-
-// Define the structure for steps with sessions
-export interface StepWithSessions {
-  uuid: string
-  text: string
-  isCompleted: boolean
-  created_at: string
-  end_at: string
-  next_step: string | null
-  sessions: SessionWithGoalAndInsight[]
-}
-
-export interface GoalWithStepsAndSessions {
-  uuid: string
-  text: string
-  created_at: string
-  end_at: string
-  steps: StepWithSessions[]
-}
-
-/**
  * Generate a specific date within the last N days
  */
 function getDateNDaysAgo(daysAgo: number): Date {
@@ -168,7 +132,7 @@ function getDateNDaysAgo(daysAgo: number): Date {
  * Generate client-side mock goal with steps and sessions (no database insertion)
  * Creates a 7-day schedule where each day has assigned steps
  */
-export function generateMockGoalData(userId: string): { success: boolean; data?: GoalWithStepsAndSessions; error?: any } {
+export function generateMockGoalData(userId: string): { success: boolean; data?: Goal; error?: any } {
   try {
     console.log('🎯 Generating 7-day scheduled mock goal data for user:', userId)
 
@@ -178,17 +142,15 @@ export function generateMockGoalData(userId: string): { success: boolean; data?:
     // Goal was created 7 days ago
     const goalStartDate = getDateNDaysAgo(7)
     
-    // Create mock goal data
-    const mockGoal = {
+    // Create Goal class instance
+    const goal = new Goal({
       uuid: `goal-${Date.now()}`,
       text: goalTemplate.text,
       created_at: goalStartDate.toISOString(),
       end_at: new Date(goalStartDate.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days from goal start
-    }
+    })
 
-    console.log('✅ Created mock goal:', mockGoal.text, 'started 7 days ago')
-
-    const mockSteps: StepWithSessions[] = []
+    console.log('✅ Created mock goal:', goal.text, 'started 7 days ago')
 
     // Create step UUIDs
     const stepUuids: string[] = []
@@ -317,15 +279,15 @@ export function generateMockGoalData(userId: string): { success: boolean; data?:
       const stepEndAt = new Date(stepEndDate)
       stepEndAt.setHours(23, 59, 59, 999) // 11:59 PM
       
-      const mockStep: StepWithSessions = {
+      // Create Step class instance
+      const step = new Step({
         uuid: stepUuids[i],
         text: stepText,
         isCompleted: false, // Will be determined by session progress
         created_at: stepCreatedAt.toISOString(),
         end_at: stepEndAt.toISOString(),
-        next_step: i < totalSteps - 1 ? stepUuids[i + 1] : null,
-        sessions: []
-      }
+        next_step: i < totalSteps - 1 ? stepUuids[i + 1] : null
+      })
 
       // Generate sessions for each day this step is assigned
       const isStepCompleted = stepsCompleted[i]
@@ -371,8 +333,8 @@ export function generateMockGoalData(userId: string): { success: boolean; data?:
           progress = randomBetween(20, 85)
         }
         
-        // Create mock insight
-        const mockInsight = {
+        // Create Insight class instance
+        const insight = new Insight({
           uuid: `insight-${Date.now()}-${i}-${sessionIndex}-${sessionInfo.dayIndex}`,
           summary: progress === 100 
             ? `Completed: ${stepText.substring(0, 60)}${stepText.length > 60 ? '...' : ''}` 
@@ -380,16 +342,23 @@ export function generateMockGoalData(userId: string): { success: boolean; data?:
           progress,
           effort_level: randomBetween(3, 10),
           stress_level: randomBetween(1, 7),
+          step_uuid: stepUuids[i],
           created_at: sessionInfo.sessionTime.toISOString()
-        }
+        })
+        insight.setStep(step)
 
-        const mockSession: SessionWithGoalAndInsight = {
-          goal: mockGoal,
-          insight: mockInsight,
-          created_at: sessionInfo.sessionTime.toISOString()
-        }
+        // Create Session class instance
+        const session = new Session({
+          uuid: `session-${Date.now()}-${i}-${sessionIndex}-${sessionInfo.dayIndex}`,
+          created_at: sessionInfo.sessionTime.toISOString(),
+          goal_uuid: goal.uuid,
+          insight_uuid: insight.uuid,
+          user_uuid: userId
+        })
+        session.setGoal(goal)
+        session.setInsight(insight)
 
-        mockStep.sessions.push(mockSession)
+        step.addSession(session)
       })
       
       // Log sessions per day
@@ -399,13 +368,8 @@ export function generateMockGoalData(userId: string): { success: boolean; data?:
         return sessionsThisDay
       })
       
-      console.log(`✅ Created step "${stepText.substring(0, 30)}..." with ${mockStep.sessions.length} total sessions (completed: ${isStepCompleted})`)
-      mockSteps.push(mockStep)
-    }
-
-    const result: GoalWithStepsAndSessions = {
-      ...mockGoal,
-      steps: mockSteps
+      console.log(`✅ Created step "${stepText.substring(0, 30)}..." with ${step.getSessions().length} total sessions (completed: ${isStepCompleted})`)
+      goal.addStep(step)
     }
 
     // Log the schedule summary
@@ -415,8 +379,8 @@ export function generateMockGoalData(userId: string): { success: boolean; data?:
       const stepIndices = dailySchedule[day] || []
       const stepNames = stepIndices.map(i => `Step ${i + 1}${stepsCompleted[i] ? '✅' : '⭕'}`).join(', ')
       const totalSessions = stepIndices.reduce((sum, stepIndex) => {
-        const step = mockSteps[stepIndex]
-        return sum + (step?.sessions.filter(session => {
+        const step = goal.getSteps()[stepIndex]
+        return sum + (step?.getSessions().filter(session => {
           const sessionDate = new Date(session.created_at)
           return sessionDate.toDateString() === date.toDateString()
         }).length || 0)
@@ -426,9 +390,9 @@ export function generateMockGoalData(userId: string): { success: boolean; data?:
     }
 
     console.log('🎉 Successfully generated 7-day scheduled mock goal data!')
-    console.log(`📊 Created: 1 goal with ${mockSteps.length} steps and ${mockSteps.reduce((acc, step) => acc + step.sessions.length, 0)} total sessions`)
+    console.log(`📊 Created: 1 goal with ${goal.getTotalStepsCount()} steps and ${goal.getTotalSessionsCount()} total sessions`)
     
-    return { success: true, data: result }
+    return { success: true, data: goal }
   } catch (error) {
     console.error('Error generating 7-day scheduled mock goal data:', error)
     return { success: false, error }
@@ -436,12 +400,12 @@ export function generateMockGoalData(userId: string): { success: boolean; data?:
 }
 
 // Client-side mock data store - now supports multiple goals per user
-let mockGoalsStore: { [userId: string]: GoalWithStepsAndSessions[] } = {}
+let mockGoalsStore: { [userId: string]: Goal[] } = {}
 
 /**
  * Generate mock data for current authenticated user (client-side only)
  */
-export async function generateMockDataForCurrentUser(): Promise<{ success: boolean; data?: GoalWithStepsAndSessions; error?: any }> {
+export async function generateMockDataForCurrentUser(): Promise<{ success: boolean; data?: Goal; error?: any }> {
   try {
     // Get current user
     const { data: { user }, error: userError } = await supabase.auth.getUser()
@@ -459,7 +423,7 @@ export async function generateMockDataForCurrentUser(): Promise<{ success: boole
         mockGoalsStore[user.id] = []
       }
       mockGoalsStore[user.id].push(result.data)
-      console.log(`🗃️ Stored mock goal with ${result.data.steps.length} steps for user ${user.id}. Total goals: ${mockGoalsStore[user.id].length}`)
+      console.log(`🗃️ Stored mock goal with ${result.data.getTotalStepsCount()} steps for user ${user.id}. Total goals: ${mockGoalsStore[user.id].length}`)
     }
     
     return result
@@ -472,14 +436,14 @@ export async function generateMockDataForCurrentUser(): Promise<{ success: boole
 /**
  * Get all mock goals for a user
  */
-export function getMockGoals(userId: string): GoalWithStepsAndSessions[] {
+export function getMockGoals(userId: string): Goal[] {
   return mockGoalsStore[userId] || []
 }
 
 /**
  * Get mock goal for a user (first goal for backward compatibility)
  */
-export function getMockGoal(userId: string): GoalWithStepsAndSessions | null {
+export function getMockGoal(userId: string): Goal | null {
   const goals = mockGoalsStore[userId]
   return goals && goals.length > 0 ? goals[0] : null
 }
@@ -487,7 +451,7 @@ export function getMockGoal(userId: string): GoalWithStepsAndSessions | null {
 /**
  * Get specific mock goal by index
  */
-export function getMockGoalByIndex(userId: string, index: number): GoalWithStepsAndSessions | null {
+export function getMockGoalByIndex(userId: string, index: number): Goal | null {
   const goals = mockGoalsStore[userId]
   return goals && goals[index] ? goals[index] : null
 }
@@ -499,19 +463,35 @@ export function getMockSessions(userId: string): SessionWithGoalAndInsight[] {
   const goals = mockGoalsStore[userId]
   if (!goals) return []
   
-  return goals.flatMap(goal => goal.steps.flatMap(step => step.sessions))
-}
-
-// Utility function to check if a step is completed based on 100% progress
-function isStepCompleted(step: StepWithSessions): boolean {
-  return step.sessions.some(session => session.insight.progress === 100)
+  // Convert Session class instances to SessionWithGoalAndInsight format
+  return goals.flatMap(goal => 
+    goal.getAllSessions().map(session => ({
+      goal: {
+        uuid: goal.uuid,
+        text: goal.text,
+        created_at: goal.created_at,
+        end_at: goal.end_at
+      } as Tables<'goal'>,
+      insight: {
+        uuid: session.getInsight()?.uuid || '',
+        summary: session.getInsight()?.summary || '',
+        progress: session.getInsight()?.progress || 0,
+        effort_level: session.getInsight()?.effort_level || 0,
+        stress_level: session.getInsight()?.stress_level || 0,
+        step_uuid: session.getInsight()?.step_uuid || '',
+        created_at: session.getInsight()?.created_at || session.created_at
+      } as Tables<'insight'>,
+      created_at: session.created_at
+    }))
+  )
 }
 
 /**
  * Sort steps based on completion status and next_step linked list relationship
  * Completed steps appear first, then incomplete steps in their natural order
+ * @deprecated Use Step class methods instead
  */
-export function sortStepsByNextStep(steps: StepWithSessions[]): StepWithSessions[] {
+export function sortStepsByNextStep(steps: Step[]): Step[] {
   if (steps.length === 0) return []
   
   // First, build the complete ordered chain using next_step relationships
@@ -521,32 +501,32 @@ export function sortStepsByNextStep(steps: StepWithSessions[]): StepWithSessions
   if (!firstStep) {
     console.warn('Could not find first step, sorting by completion status only')
     return [...steps].sort((a, b) => {
-      const aCompleted = isStepCompleted(a)
-      const bCompleted = isStepCompleted(b)
+      const aCompleted = a.isCompleted()
+      const bCompleted = b.isCompleted()
       if (aCompleted === bCompleted) return 0
       return aCompleted ? -1 : 1 // Completed steps first
     })
   }
   
   // Build the complete ordered list by following next_step references
-  const completeOrderedSteps: StepWithSessions[] = []
+  const completeOrderedSteps: Step[] = []
   const stepMap = new Map(steps.map(step => [step.uuid, step]))
   
-  let currentStep: StepWithSessions | undefined = firstStep
+  let currentStep: Step | undefined = firstStep
   while (currentStep) {
     completeOrderedSteps.push(currentStep)
     currentStep = currentStep.next_step ? stepMap.get(currentStep.next_step) : undefined
   }
   
   // Now separate completed and incomplete steps while maintaining their relative order
-  const completedSteps = completeOrderedSteps.filter(step => isStepCompleted(step))
-  const incompleteSteps = completeOrderedSteps.filter(step => !isStepCompleted(step))
+  const completedSteps = completeOrderedSteps.filter(step => step.isCompleted())
+  const incompleteSteps = completeOrderedSteps.filter(step => !step.isCompleted())
   
   // Return completed steps first, then incomplete steps
   const finalOrder = [...completedSteps, ...incompleteSteps]
   
   console.log(`🔗 Sorted ${finalOrder.length} steps: ${completedSteps.length} completed first, then ${incompleteSteps.length} incomplete`)
-  console.log(`📋 Order: ${finalOrder.map((s, i) => `${i + 1}.${isStepCompleted(s) ? '✅' : '⭕'}`).join(' ')}`)
+  console.log(`📋 Order: ${finalOrder.map((s, i) => `${i + 1}.${s.isCompleted() ? '✅' : '⭕'}`).join(' ')}`)
   
   return finalOrder
 }
@@ -562,7 +542,7 @@ export function clearMockSessions(userId: string): void {
 /**
  * Generate additional mock goal for a user
  */
-export function generateAdditionalMockGoal(userId: string): { success: boolean; data?: GoalWithStepsAndSessions; error?: any } {
+export function generateAdditionalMockGoal(userId: string): { success: boolean; data?: Goal; error?: any } {
   const result = generateMockGoalData(userId)
   
   if (result.success && result.data) {

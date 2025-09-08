@@ -7,29 +7,27 @@ import { Globe, LogOut, User, RefreshCw } from 'lucide-react'
 import { useProfile } from '@/src/hooks/useProfile'
 import { useOnboardingRedirect } from '@/src/hooks/useOnboarding'
 import { useUserGoals, useSessions, goalsKeys, sessionsKeys } from '@/src/hooks/useGoals'
-import GoalTimeline from '@/src/components/dashboard/GoalTimeline'
-import GoalInsights from '@/src/components/dashboard/GoalInsights'
-import GoalCalendar from '@/src/components/dashboard/GoalCalendar'
+import GoalTimeline from '@/src/components/dashboard/timeline/GoalTimeline'
+import GoalInsights from '@/src/components/dashboard/insights/GoalInsights'
+import GoalCalendar from '@/src/components/dashboard/calendar/GoalCalendar'
 import MockDataGenerator from '@/src/components/dev/MockDataGenerator'
 import LoadingSpinner from '@/src/components/ui/loading-spinner'
 import { useQueryClient } from '@tanstack/react-query'
-import { getMockGoals, sortStepsByNextStep } from '@/src/lib/mock-data'
+import { Goal } from '@/src/classes/Goal'
 
 export default function Dashboard() {
   const { user, loading, signOut } = useAuth()
   const queryClient = useQueryClient()
   const router = useRouter()
-  const { data: profile } = useProfile(user?.id)
   const { shouldRedirect: shouldRedirectToOnboarding, isLoading: onboardingLoading } = useOnboardingRedirect()
-  const { data: userGoals, isLoading: goalsLoading } = useUserGoals(user?.id)
-  const { data: sessions, isLoading: sessionsLoading } = useSessions(user?.id)
-  
-  // Get mock goals if available
-  const mockGoals = user?.id ? getMockGoals(user.id) : []
+
+  // Fetch goals and sessions using hooks
+  const { data: goals = [], isLoading: goalsLoading } = useUserGoals(user?.id)
+  const { data: sessions = [], isLoading: sessionsLoading } = useSessions(user?.id)
   
   // Track currently selected goal for insights
   const [selectedGoalIndex, setSelectedGoalIndex] = useState(0)
-  const selectedGoal = mockGoals && mockGoals.length > 0 ? mockGoals[selectedGoalIndex] : null
+  const selectedGoal = goals && goals.length > 0 ? goals[selectedGoalIndex] : null
 
   useEffect(() => {
     if (!loading && !user) {
@@ -114,11 +112,11 @@ export default function Dashboard() {
           </div>
         ) : (
           <GoalTimeline 
-            goals={mockGoals} 
+            goals={goals} 
             selectedGoalIndex={selectedGoalIndex}
             onGoalChange={setSelectedGoalIndex}
             onStepClick={(step) => {
-              console.log('Step clicked:', step.text, 'Sessions:', step.sessions.length)
+              console.log('Step clicked:', step.text, 'Sessions:', step.getSessions().length)
             }}
           />
         )}
@@ -182,13 +180,13 @@ export default function Dashboard() {
                   <p>Goals Loading: {goalsLoading ? '⏳ Loading...' : '✅ Loaded'}</p>
                   <p>Sessions Loading: {sessionsLoading ? '⏳ Loading...' : '✅ Loaded'}</p>
                   <p>Onboarding Check: {onboardingLoading ? '⏳ Loading...' : '✅ Loaded'}</p>
-                  <p>Mock Goals: {mockGoals.length > 0 ? `✅ ${mockGoals.length} Available` : '❌ None'}</p>
+                  <p>Goals: {goals.length > 0 ? `✅ ${goals.length} Available` : '❌ None'}</p>
                   <p>User ID: {user?.id || 'None'}</p>
-                  {mockGoals.length > 0 && (
+                  {goals.length > 0 && (
                     <div>
-                      <p>Current Goal: {mockGoals[0]?.text.substring(0, 30)}...</p>
-                      <p>Total Steps: {mockGoals.reduce((acc, goal) => acc + goal.steps.length, 0)}</p>
-                      <p>Goals: {mockGoals.map((g, i) => `${i + 1}.${g.text.substring(0, 15)}...`).join(' | ')}</p>
+                      <p>Current Goal: {goals[0]?.text.substring(0, 30)}...</p>
+                      <p>Total Steps: {goals.reduce((acc, goal) => acc + goal.getTotalStepsCount(), 0)}</p>
+                      <p>Goals: {goals.map((g, i) => `${i + 1}.${g.text.substring(0, 15)}...`).join(' | ')}</p>
                     </div>
                   )}
                 </div>

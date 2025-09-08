@@ -4,17 +4,17 @@ import { supabase } from '@/src/lib/supabase'
 import { onboardingKeys } from './useOnboarding'
 import { goalCreationKeys } from './goalCreation/useGoalCreation'
 import { Tables } from '@/src/types/database'
-import { getMockSessions } from '@/src/lib/mock-data'
+import { Goal } from '@/src/classes/Goal'
+import { Session } from '@/src/classes/Session'
+import { fetchUserGoalsWithDetails, fetchUserSessions, createSessionWithInsight } from '@/src/lib/queries'
+import { getMockGoals, getMockSessions } from '@/src/lib/mock-data'
+import { Insight } from '../classes'
 
 type UserGoal = Tables<'user_goal'>
-type Goal = Tables<'goal'>
-type Step = Tables<'step'>
-type Session = Tables<'session'>
-type Insight = Tables<'insight'>
 
 export interface SessionWithGoalAndInsight {
-  goal: Goal
-  insight: Insight
+  goal: Tables<'goal'>
+  insight: Tables<'insight'>
   created_at: string
 }
 
@@ -65,7 +65,13 @@ async function createGoal(goalText: string, endAt?: string): Promise<{ data: Goa
       .select()
       .single()
     
-    return { data, error }
+    if (error || !data) {
+      return { data: null, error }
+    }
+    
+    // Convert to Goal class instance
+    const goal = new Goal(data)
+    return { data: goal, error: null }
   } catch (error) {
     console.warn('Error creating goal:', error)
     return { data: null, error }
@@ -183,27 +189,29 @@ async function getUserSessions(userUuid: string): Promise<{ data: SessionWithGoa
 }
 
 /**
- * Hook to fetch and cache user goals data
+ * Hook to fetch and cache user goals data using Goal classes
  */
 export function useUserGoals(userId?: string) {
   return useQuery({
     queryKey: goalsKeys.user(userId || ''),
-    queryFn: async () => {
+    queryFn: async (): Promise<Goal[]> => {
       if (!userId) {
         console.log('🎯 [useUserGoals] No user ID provided')
-        return null
+        return []
       }
       
-      console.log('🎯 [useUserGoals] Fetching goals for user:', userId)
-      const { data, error } = await getUserGoals(userId)
-      
-      if (error) {
-        console.warn('❌ [useUserGoals] Error fetching user goals:', error)
-        return null
+      // First check for mock data
+      const mockGoals = getMockGoals(userId)
+      if (mockGoals.length > 0) {
+        console.log('🎭 [useUserGoals] Using mock goals:', { userId, goalCount: mockGoals.length })
+        return mockGoals
       }
       
-      console.log('✅ [useUserGoals] Successfully fetched goals:', { userId, goalCount: data?.length || 0, data })
-      return data
+      console.log('🎯 [useUserGoals] Fetching real goals for user:', userId)
+      const goals = await fetchUserGoalsWithDetails(userId)
+      
+      console.log('✅ [useUserGoals] Successfully fetched goals:', { userId, goalCount: goals.length })
+      return goals
     },
     enabled: !!userId,
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -212,34 +220,40 @@ export function useUserGoals(userId?: string) {
 }
 
 /**
- * Hook to fetch user's sessions with goal and insight data
+ * Hook to fetch user's sessions using Session classes
  */
 export function useSessions(userId?: string) {
   return useQuery({
     queryKey: sessionsKeys.user(userId || ''),
-    queryFn: async () => {
+    queryFn: async (): Promise<Session[]> => {
       if (!userId) {
         console.log('📊 [useSessions] No user ID provided')
-        return null
+        return []
       }
       
       // First check for mock data
       const mockSessions = getMockSessions(userId)
       if (mockSessions.length > 0) {
         console.log('🎭 [useSessions] Using mock sessions:', { userId, sessionCount: mockSessions.length })
-        return mockSessions
+        // Convert mock sessions to Session class instances if needed
+        return mockSessions.map(mockSession => {
+          const session = new Session({
+            uuid: `mock-${Date.now()}-${Math.random()}`,
+            created_at: mockSession.created_at,
+            goal_uuid: mockSession.goal.uuid,
+            insight_uuid: mockSession.insight.uuid,
+            user_uuid: userId
+          })
+          // Set relations would need to be implemented based on mock data structure
+          return session
+        })
       }
       
       console.log('📊 [useSessions] Fetching real sessions for user:', userId)
-      const { data, error } = await getUserSessions(userId)
+      const sessions = await fetchUserSessions(userId)
       
-      if (error) {
-        console.warn('❌ [useSessions] Error fetching sessions:', error)
-        return null
-      }
-      
-      console.log('✅ [useSessions] Successfully fetched sessions:', { userId, sessionCount: data?.length || 0, data })
-      return data
+      console.log('✅ [useSessions] Successfully fetched sessions:', { userId, sessionCount: sessions.length })
+      return sessions
     },
     enabled: !!userId,
     staleTime: 5 * 60 * 1000, // 5 minutes

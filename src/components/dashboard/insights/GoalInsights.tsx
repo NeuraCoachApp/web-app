@@ -1,16 +1,12 @@
 'use client'
 
 import React, { useMemo } from 'react'
-import { GoalWithStepsAndSessions, SessionWithGoalAndInsight } from '@/src/lib/mock-data'
+import { Goal } from '@/src/classes/Goal'
+import { Session } from '@/src/classes/Session'
 import { TrendingUp, Zap, Brain, Calendar, BarChart3, Activity } from 'lucide-react'
 
-// Utility function to check if a step is completed based on 100% progress
-function isStepCompleted(step: any): boolean {
-  return step.sessions.some((session: any) => session.insight.progress === 100)
-}
-
 interface GoalInsightsProps {
-  goal: GoalWithStepsAndSessions | null
+  goal: Goal | null
 }
 
 interface MetricData {
@@ -113,13 +109,13 @@ function MetricCard({
   )
 }
 
-function ProgressOverview({ goal }: { goal: GoalWithStepsAndSessions }) {
-  const completedSteps = goal.steps.filter(step => isStepCompleted(step)).length
-  const totalSteps = goal.steps.length
-  const completionPercentage = totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0
+function ProgressOverview({ goal }: { goal: Goal }) {
+  const completedSteps = goal.getCompletedStepsCount()
+  const totalSteps = goal.getTotalStepsCount()
+  const completionPercentage = goal.getCompletionPercentage()
   
-  const totalSessions = goal.steps.reduce((sum, step) => sum + step.sessions.length, 0)
-  const stepsWithSessions = goal.steps.filter(step => step.sessions.length > 0).length
+  const totalSessions = goal.getTotalSessionsCount()
+  const stepsWithSessions = goal.getActiveStepsCount()
 
   return (
     <div className="bg-card rounded-lg border border-border p-6">
@@ -167,7 +163,7 @@ export default function GoalInsights({ goal }: GoalInsightsProps) {
     }
 
     // Collect all sessions from all steps
-    const allSessions: SessionWithGoalAndInsight[] = goal.steps.flatMap(step => step.sessions)
+    const allSessions: Session[] = goal.getAllSessions()
     
     // Sort sessions by date
     const sortedSessions = allSessions.sort((a, b) => 
@@ -182,7 +178,7 @@ export default function GoalInsights({ goal }: GoalInsightsProps) {
       }
       acc[date].push(session)
       return acc
-    }, {} as Record<string, SessionWithGoalAndInsight[]>)
+    }, {} as Record<string, Session[]>)
 
     // Calculate daily metrics
     const effort: MetricData[] = []
@@ -190,30 +186,36 @@ export default function GoalInsights({ goal }: GoalInsightsProps) {
     const progress: MetricData[] = []
 
     Object.entries(sessionsByDate).forEach(([date, sessions]) => {
-      const avgEffort = sessions.reduce((sum, s) => sum + s.insight.effort_level, 0) / sessions.length
-      const avgStress = sessions.reduce((sum, s) => sum + s.insight.stress_level, 0) / sessions.length
-      const avgProgress = sessions.reduce((sum, s) => sum + s.insight.progress, 0) / sessions.length
+      const sessionsWithInsights = sessions.filter(s => s.getInsight())
+      if (sessionsWithInsights.length === 0) return
+
+      const avgEffort = sessionsWithInsights.reduce((sum, s) => sum + (s.getInsight()?.effort_level || 0), 0) / sessionsWithInsights.length
+      const avgStress = sessionsWithInsights.reduce((sum, s) => sum + (s.getInsight()?.stress_level || 0), 0) / sessionsWithInsights.length
+      const avgProgress = sessionsWithInsights.reduce((sum, s) => sum + (s.getInsight()?.progress || 0), 0) / sessionsWithInsights.length
       
       // Use the most recent session's summary for that date
-      const latestSession = sessions[sessions.length - 1]
+      const latestSession = sessionsWithInsights[sessionsWithInsights.length - 1]
+      const latestInsight = latestSession.getInsight()
       
-      effort.push({
-        date,
-        value: Math.round(avgEffort * 10) / 10,
-        summary: latestSession.insight.summary
-      })
-      
-      stress.push({
-        date,
-        value: Math.round(avgStress * 10) / 10,
-        summary: latestSession.insight.summary
-      })
-      
-      progress.push({
-        date,
-        value: Math.round(avgProgress),
-        summary: latestSession.insight.summary
-      })
+      if (latestInsight) {
+        effort.push({
+          date,
+          value: Math.round(avgEffort * 10) / 10,
+          summary: latestInsight.summary
+        })
+        
+        stress.push({
+          date,
+          value: Math.round(avgStress * 10) / 10,
+          summary: latestInsight.summary
+        })
+        
+        progress.push({
+          date,
+          value: Math.round(avgProgress),
+          summary: latestInsight.summary
+        })
+      }
     })
 
     return { effort, stress, progress }
@@ -313,7 +315,7 @@ export default function GoalInsights({ goal }: GoalInsightsProps) {
             </div>
             <div>
               <div className="text-lg font-semibold text-foreground">
-                {goal.steps.reduce((sum, step) => sum + step.sessions.length, 0)}
+                {goal.getTotalSessionsCount()}
               </div>
               <div className="text-xs text-muted-foreground">Total Sessions</div>
             </div>

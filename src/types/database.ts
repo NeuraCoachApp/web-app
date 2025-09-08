@@ -73,6 +73,7 @@ export type Database = {
           created_at: string
           effort_level: number
           progress: number
+          step_uuid: string
           stress_level: number
           summary: string
           uuid: string
@@ -81,6 +82,7 @@ export type Database = {
           created_at?: string
           effort_level?: number
           progress?: number
+          step_uuid?: string
           stress_level?: number
           summary?: string
           uuid?: string
@@ -89,11 +91,20 @@ export type Database = {
           created_at?: string
           effort_level?: number
           progress?: number
+          step_uuid?: string
           stress_level?: number
           summary?: string
           uuid?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "insight_step_uuid_fkey"
+            columns: ["step_uuid"]
+            isOneToOne: false
+            referencedRelation: "step"
+            referencedColumns: ["uuid"]
+          },
+        ]
       }
       profile: {
         Row: {
@@ -254,6 +265,30 @@ export type Database = {
           user_uuid: string
         }[]
       }
+      create_session_with_insight: {
+        Args: {
+          p_effort_level: number
+          p_goal_uuid: string
+          p_progress: number
+          p_step_uuid: string
+          p_stress_level: number
+          p_summary: string
+          p_user_uuid: string
+        }
+        Returns: Json
+      }
+      get_goal_daily_metrics: {
+        Args: { p_days_back?: number; p_goal_uuid: string }
+        Returns: Json
+      }
+      get_goal_progress_summary: {
+        Args: { p_goal_uuid: string }
+        Returns: Json
+      }
+      get_goal_with_details: {
+        Args: { p_goal_uuid: string }
+        Returns: Json
+      }
       get_profile: {
         Args: { p_user_uuid: string }
         Returns: {
@@ -264,6 +299,14 @@ export type Database = {
           updated_at: string
           uuid: string
         }
+      }
+      get_user_goals_with_details: {
+        Args: { p_user_uuid: string }
+        Returns: Json
+      }
+      get_user_sessions: {
+        Args: { p_user_uuid: string }
+        Returns: Json
       }
       update_profile: {
         Args: {

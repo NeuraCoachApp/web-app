@@ -1,25 +1,21 @@
 'use client'
 
 import React, { useState, useMemo } from 'react'
-import { GoalWithStepsAndSessions, StepWithSessions, sortStepsByNextStep } from '@/src/lib/mock-data'
+import { Goal } from '@/src/classes/Goal'
+import { Step } from '@/src/classes/Step'
 import { Target, CheckCircle, Circle, Calendar, TrendingUp, Zap, Brain, ChevronDown } from 'lucide-react'
 
-// Utility function to check if a step is completed based on 100% progress
-function isStepCompleted(step: StepWithSessions): boolean {
-  return step.sessions.some(session => session.insight.progress === 100)
-}
-
 interface GoalTimelineProps {
-  goals: GoalWithStepsAndSessions[]
+  goals: Goal[]
   selectedGoalIndex?: number
   onGoalChange?: (index: number) => void
-  onStepClick?: (step: StepWithSessions) => void
+  onStepClick?: (step: Step) => void
 }
 
 interface StepSessionModalProps {
   isOpen: boolean
   onClose: () => void
-  step: StepWithSessions | null
+  step: Step | null
 }
 
 function StepSessionModal({ isOpen, onClose, step }: StepSessionModalProps) {
@@ -42,7 +38,7 @@ function StepSessionModal({ isOpen, onClose, step }: StepSessionModalProps) {
         
         <div className="mb-4">
           <div className="flex items-center gap-2 mb-2">
-            {isStepCompleted(step) ? (
+            {step.isCompleted() ? (
               <CheckCircle className="w-5 h-5 text-green-500" />
             ) : (
               <Circle className="w-5 h-5 text-muted-foreground" />
@@ -56,27 +52,15 @@ function StepSessionModal({ isOpen, onClose, step }: StepSessionModalProps) {
             <Calendar className="w-4 h-4 text-muted-foreground" />
             <span className="text-muted-foreground">Deadline:</span>
             <span className="text-card-foreground font-medium">
-              {new Date(step.end_at).toLocaleDateString('en-US', {
-                weekday: 'short',
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-              })}
+              {step.getFormattedEndDate()}
             </span>
             {/* Deadline status indicator */}
             {(() => {
-              const now = new Date()
-              const deadline = new Date(step.end_at)
-              const isOverdue = now > deadline && !isStepCompleted(step)
-              const isDueSoon = deadline.getTime() - now.getTime() < 24 * 60 * 60 * 1000 && !isStepCompleted(step) // Within 24 hours
-              
-              if (isStepCompleted(step)) {
+              if (step.isCompleted()) {
                 return <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">Completed</span>
-              } else if (isOverdue) {
+              } else if (step.isOverdue()) {
                 return <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded-full">Overdue</span>
-              } else if (isDueSoon) {
+              } else if (step.getDaysRemaining() <= 1) {
                 return <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full">Due Soon</span>
               } else {
                 return <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">On Track</span>
@@ -85,7 +69,7 @@ function StepSessionModal({ isOpen, onClose, step }: StepSessionModalProps) {
           </div>
         </div>
 
-        {step.sessions.length === 0 ? (
+        {step.getSessions().length === 0 ? (
           <div className="text-center py-8">
             <Brain className="w-12 h-12 text-muted-foreground mx-auto mb-2" />
             <p className="text-muted-foreground">No sessions logged for this step yet.</p>
@@ -93,39 +77,44 @@ function StepSessionModal({ isOpen, onClose, step }: StepSessionModalProps) {
         ) : (
           <div className="space-y-4">
             <h4 className="text-sm font-medium text-card-foreground">
-              Sessions ({step.sessions.length})
+              Sessions ({step.getSessions().length})
             </h4>
-            {step.sessions.map((session, index) => (
-              <div key={`${step.uuid}-session-${index}`} className="bg-background rounded-lg p-4 border border-border">
-                <div className="flex items-center gap-2 mb-2">
-                  <Calendar className="w-4 h-4 text-muted-foreground" />
-                  <span className="text-xs text-muted-foreground">
-                    {new Date(session.created_at).toLocaleDateString()}
-                  </span>
-                </div>
-                
-                <div className="space-y-2">
-                  <p className="text-sm text-card-foreground">
-                    {session.insight.summary}
-                  </p>
-                  
-                  <div className="flex gap-4 text-xs">
-                    <div className="flex items-center gap-1">
-                      <TrendingUp className="w-3 h-3 text-blue-500" />
-                      <span>Progress: {session.insight.progress}%</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Zap className="w-3 h-3 text-yellow-500" />
-                      <span>Effort: {session.insight.effort_level}/10</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Brain className="w-3 h-3 text-red-500" />
-                      <span>Stress: {session.insight.stress_level}/10</span>
-                    </div>
+            {step.getSessions().map((session, index) => {
+              const insight = session.getInsight()
+              return (
+                <div key={`${step.uuid}-session-${index}`} className="bg-background rounded-lg p-4 border border-border">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Calendar className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground">
+                      {session.getFormattedDate()}
+                    </span>
                   </div>
+                  
+                  {insight && (
+                    <div className="space-y-2">
+                      <p className="text-sm text-card-foreground">
+                        {insight.summary}
+                      </p>
+                      
+                      <div className="flex gap-4 text-xs">
+                        <div className="flex items-center gap-1">
+                          <TrendingUp className="w-3 h-3 text-blue-500" />
+                          <span>Progress: {insight.progress}%</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Zap className="w-3 h-3 text-yellow-500" />
+                          <span>Effort: {insight.effort_level}/10</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Brain className="w-3 h-3 text-red-500" />
+                          <span>Stress: {insight.stress_level}/10</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
@@ -139,7 +128,7 @@ export default function GoalTimeline({
   onGoalChange, 
   onStepClick 
 }: GoalTimelineProps) {
-  const [selectedStep, setSelectedStep] = useState<StepWithSessions | null>(null)
+  const [selectedStep, setSelectedStep] = useState<Step | null>(null)
   const [internalSelectedGoalIndex, setInternalSelectedGoalIndex] = useState(0)
   const [showGoalDropdown, setShowGoalDropdown] = useState(false)
 
@@ -149,11 +138,11 @@ export default function GoalTimeline({
 
   const currentGoal = goals && goals.length > 0 ? goals[selectedGoalIndex] : null
 
-  // Sort steps by next_step relationship
+  // Get steps from the current goal
   const sortedSteps = useMemo(() => {
-    if (!currentGoal?.steps) return []
-    return sortStepsByNextStep(currentGoal.steps)
-  }, [currentGoal?.steps])
+    if (!currentGoal) return []
+    return currentGoal.getSteps()
+  }, [currentGoal])
 
   // Determine current step index (first incomplete step with sessions, or first incomplete step)
   const currentStepIndex = useMemo(() => {
@@ -161,13 +150,13 @@ export default function GoalTimeline({
     
     // Find the first step that is not completed but has sessions (user is working on it)
     const activeStepIndex = sortedSteps.findIndex(step => 
-      !isStepCompleted(step) && step.sessions.length > 0
+      !step.isCompleted() && step.getSessions().length > 0
     )
     
     if (activeStepIndex !== -1) return activeStepIndex
     
     // If no active step with sessions, find first incomplete step
-    const firstIncompleteIndex = sortedSteps.findIndex(step => !isStepCompleted(step))
+    const firstIncompleteIndex = sortedSteps.findIndex(step => !step.isCompleted())
     
     return firstIncompleteIndex !== -1 ? firstIncompleteIndex : sortedSteps.length - 1
   }, [sortedSteps])
@@ -175,7 +164,7 @@ export default function GoalTimeline({
   // Check if all steps are completed
   const allStepsCompleted = useMemo(() => {
     if (sortedSteps.length === 0) return false
-    return sortedSteps.every(step => isStepCompleted(step))
+    return sortedSteps.every(step => step.isCompleted())
   }, [sortedSteps])
 
   // Debug logging
@@ -188,9 +177,9 @@ export default function GoalTimeline({
   console.log('🎨 [GoalTimeline] All steps completed:', allStepsCompleted)
   
   sortedSteps.forEach((step, index) => {
-    const isCompleted = isStepCompleted(step)
+    const isCompleted = step.isCompleted()
     const isFuture = index > currentStepIndex && !isCompleted
-    console.log(`📋 [GoalTimeline] Step ${index + 1}: ${isCompleted ? '✅' : '⭕'} ${isFuture ? '🔮' : '🎯'} ${step.text.substring(0, 30)}... (Next: ${step.next_step?.substring(0, 8) || 'null'}, Sessions: ${step.sessions?.length || 0})`)
+    console.log(`📋 [GoalTimeline] Step ${index + 1}: ${isCompleted ? '✅' : '⭕'} ${isFuture ? '🔮' : '🎯'} ${step.text.substring(0, 30)}... (Next: ${step.next_step?.substring(0, 8) || 'null'}, Sessions: ${step.getSessions().length})`)
   })
 
   // Create placeholder timeline when no goals exist
@@ -305,7 +294,7 @@ export default function GoalTimeline({
     return renderPlaceholderTimeline()
   }
 
-  const handleStepClick = (step: StepWithSessions) => {
+  const handleStepClick = (step: Step) => {
     setSelectedStep(step)
     
     if (onStepClick) {
@@ -349,7 +338,7 @@ export default function GoalTimeline({
                         <span>{goal.text}</span>
                       </div>
                       <div className="text-xs text-muted-foreground mt-1">
-                        {goal.steps.filter(s => isStepCompleted(s)).length}/{goal.steps.length} steps completed
+                        {goal.getCompletedStepsCount()}/{goal.getTotalStepsCount()} steps completed
                       </div>
                     </button>
                   ))}
@@ -418,8 +407,8 @@ export default function GoalTimeline({
                 {sortedSteps.map((step, stepIndex) => {
                   const isEven = stepIndex % 2 === 0
                   const isLast = stepIndex === sortedSteps.length - 1
-                  const hasSessions = step.sessions && step.sessions.length > 0
-                  const isCompleted = isStepCompleted(step)
+                  const hasSessions = step.getSessions().length > 0
+                  const isCompleted = step.isCompleted()
                   const isFutureStep = stepIndex > currentStepIndex && !isCompleted
                   
                   return (
@@ -460,10 +449,10 @@ export default function GoalTimeline({
                           `}
                         >
                           {/* Glossy Green Overlay for Completed Steps */}
-                          {isStepCompleted(step) && (
+                          {step.isCompleted() && (
                             <>
                               {/* Base green gradient background */}
-                              <div className="absolute inset-0 green-500 rounded-lg" />
+                              <div className="absolute inset-0 bg-green-500 rounded-lg" />
                               
                               {/* Edge highlight */}
                               <div className="absolute inset-0 border border-green-500/50 rounded-lg" />
@@ -482,7 +471,7 @@ export default function GoalTimeline({
                           {hasSessions && (
                             <div className="absolute top-2 left-2 flex items-center gap-1 text-xs text-primary">
                               <Brain className="w-3 h-3" />
-                              <span className="text-xs font-semibold">{step.sessions.length}</span>
+                              <span className="text-xs font-semibold">{step.getSessions().length}</span>
                             </div>
                           )}
                           
@@ -536,7 +525,7 @@ export default function GoalTimeline({
                     <p className={`text-xs text-center relative z-10 ${
                       allStepsCompleted ? 'text-green-100' : 'text-muted-foreground'
                     }`}>
-                      {currentGoal ? `${sortedSteps.filter(s => isStepCompleted(s)).length}/${sortedSteps.length}` : '0/0'}
+                      {currentGoal ? `${currentGoal.getCompletedStepsCount()}/${currentGoal.getTotalStepsCount()}` : '0/0'}
                     </p>
                   </div>
                   <div className="mt-3 text-center">
