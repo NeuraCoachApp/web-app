@@ -437,31 +437,32 @@ export default function GoalTimeline({
                         <div
                           onClick={() => handleStepClick(step)}
                           className={`
-                            w-28 h-28 bg-card rounded-lg cursor-pointer
+                            w-28 h-28 rounded-lg cursor-pointer
                             transition-all duration-200 hover:shadow-lg hover:scale-105
                             flex flex-col items-center justify-center p-3 relative
                             ${isCompleted
-                              ? 'relative overflow-hidden' 
-                              : 'hover:bg-primary/5'
+                              ? 'bg-card' 
+                              : stepIndex === currentStepIndex
+                              ? 'bg-card border-2 border-primary/30 shadow-lg shadow-primary/10'
+                              : 'bg-card hover:bg-primary/5'
                             }
                             ${hasSessions ? 'ring-2 ring-primary/20' : ''}
                             ${isFutureStep ? 'opacity-40' : ''}
                           `}
+                          style={isCompleted ? {
+                            boxShadow: '0 0 20px rgba(16, 185, 129, 0.3)'
+                          } : {}}
                         >
-                          {/* Glossy Green Overlay for Completed Steps */}
+                          {/* Green gradient border for completed steps */}
                           {step.isCompleted() && (
-                            <>
-                              {/* Base green gradient background */}
-                              <div className="absolute inset-0 bg-green-500 rounded-lg" />
-                              
-                              {/* Edge highlight */}
-                              <div className="absolute inset-0 border border-green-500/50 rounded-lg" />
-                            </>
+                            <div className="absolute inset-0 rounded-lg bg-gradient-to-r from-green-400 via-green-500 to-emerald-600 p-[2px]">
+                              <div className="w-full h-full bg-card rounded-[6px]"></div>
+                            </div>
                           )}
                           {/* Status Icon */}
-                          <div className="absolute top-2 right-2">
+                          <div className="absolute top-2 right-2 z-10">
                             {isCompleted ? (
-                              <CheckCircle className="w-4 h-4 text-green-500" />
+                              <CheckCircle className="w-4 h-4 text-green-500 drop-shadow-sm" />
                             ) : (
                               <Circle className={`w-4 h-4 ${isFutureStep ? 'text-muted-foreground/50' : 'text-muted-foreground'}`} />
                             )}
@@ -469,16 +470,20 @@ export default function GoalTimeline({
                           
                           {/* Session count indicator */}
                           {hasSessions && (
-                            <div className="absolute top-2 left-2 flex items-center gap-1 text-xs text-primary">
+                            <div className="absolute top-2 left-2 flex items-center gap-1 text-xs text-primary z-10">
                               <Brain className="w-3 h-3" />
                               <span className="text-xs font-semibold">{step.getSessions().length}</span>
                             </div>
                           )}
                           
                           {/* Step content */}
-                          <div className="flex-1 flex flex-col items-center justify-center text-center">
+                          <div className="flex-1 flex flex-col items-center justify-center text-center z-10">
                             <p className={`text-xs font-medium leading-tight ${
-                              isFutureStep ? 'text-card-foreground/50' : 'text-card-foreground'
+                              isCompleted 
+                                ? 'text-card-foreground drop-shadow-sm' 
+                                : isFutureStep 
+                                ? 'text-card-foreground/50' 
+                                : 'text-card-foreground'
                             }`}>
                               {step.text.length > 45 ? `${step.text.substring(0, 45)}...` : step.text}
                             </p>

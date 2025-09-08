@@ -3,10 +3,8 @@ import { useState, useCallback } from 'react'
 import { useAuth } from '@/src/contexts/AuthContext'
 import { useProfile } from '../useProfile'
 import { useCreateGoal, useUserGoals } from '../useGoals'
-import { useSpeechRecognition } from '@/src/lib/speech-recognition'
 import { Tables } from '@/src/types/database'
-
-type UserGoal = Tables<'user_goal'>
+import { Goal } from '@/src/classes/Goal'
 
 export interface GoalCreationStep {
   id: string
@@ -108,7 +106,7 @@ export const goalCreationKeys = {
 /**
  * Check user's goal creation status based on existing goals data
  */
-function checkGoalCreationStatus(userGoals: UserGoal[] | null): GoalCreationStatus {
+function checkGoalCreationStatus(userGoals: Goal[] | null): GoalCreationStatus {
   console.log('🎯 [Goal Creation] Checking goal creation status:', { 
     hasData: !!userGoals, 
     goalCount: userGoals?.length || 0 
