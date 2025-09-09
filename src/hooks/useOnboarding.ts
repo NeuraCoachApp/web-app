@@ -31,21 +31,58 @@ export interface OnboardingState {
   notificationTime: string
   speechError: string
   onboardingChecked: boolean
+  flowCompleted: boolean // Flag to prevent reinitialization after completion
 }
 
-// Slim onboarding flow - only profile setup
+// New onboarding flow matching the specified script
 export const onboardingSteps: OnboardingStep[] = [
   {
-    id: 'welcome',
-    text: "Hi there! What's your name?",
+    id: 'greeting',
+    text: "Hi there. Welcome.",
     subtext: "",
     personality: "warm and welcoming"
   },
   {
-    id: 'profile_complete',
-    text: "Perfect! Your profile is now set up. Welcome to NeuraCoach! Let's get started.",
+    id: 'name_input',
+    text: "What is your name?",
     subtext: "",
-    personality: "encouraging and welcoming"
+    personality: "warm and friendly"
+  },
+  {
+    id: 'personal_welcome',
+    text: "Welcome [Name]!",
+    subtext: "",
+    personality: "warm and personalized"
+  },
+  {
+    id: 'ava_introduction',
+    text: "My name is Ava and I'll be guiding you through a new journey.",
+    subtext: "",
+    personality: "friendly and confident"
+  },
+  {
+    id: 'growth_message',
+    text: "If you want to grow, we'll guide you through the journey in a way no other platform has done before.",
+    subtext: "",
+    personality: "inspiring and confident"
+  },
+  {
+    id: 'statistics',
+    text: "Over 90% of people who set goals say achieving them makes them feel more confident and fulfilled, yet most struggle to stay consistent.",
+    subtext: "",
+    personality: "informative and understanding"
+  },
+  {
+    id: 'reassurance',
+    text: "Know you are not alone.",
+    subtext: "",
+    personality: "comforting and supportive"
+  },
+  {
+    id: 'mission_statement',
+    text: "We'll help you understand your goals and mindset, and feel more in control, through daily reflections and personalized exercises, one small step at a time.",
+    subtext: "",
+    personality: "encouraging and methodical"
   }
 ]
 
@@ -135,11 +172,8 @@ export function useOnboardingRedirect() {
  * Utility function to get current step text with name replacements
  */
 export function getCurrentStepText(step: OnboardingStep, userName?: string, firstName?: string): string {
-  if (step.id === 'final') {
-    return step.text.replace('____', userName || firstName || 'there')
-  }
-  if (step.id === 'questions_time') {
-    return step.text.replace('______', userName || firstName || 'friend')
+  if (step.id === 'personal_welcome') {
+    return step.text.replace('[Name]', firstName || userName || 'there')
   }
   return step.text
 }
@@ -166,28 +200,59 @@ export function useOnboardingFlow() {
     goal: '',
     notificationTime: '09:00',
     speechError: '',
-    onboardingChecked: false
+    onboardingChecked: false,
+    flowCompleted: false
   })
 
   // Initialize starting step based on onboarding status
   const initializeStep = useCallback(() => {
+    // Only initialize once when we first load the onboarding
     if (!user || !onboardingStatus || state.onboardingChecked) return
+
+    // If flow was completed in this session, don't reinitialize
+    if (state.flowCompleted) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🚫 [Onboarding] Flow already completed in this session, preventing reinitialization')
+      }
+      return
+    }
 
     // If no onboarding needed, don't initialize
     if (!onboardingStatus.shouldRedirectToOnboarding) {
       return
     }
 
+    // Don't initialize if we're already past the first few steps (prevents reset after profile save)
+    if (state.currentStep > 2) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🚫 [Onboarding] Already in progress, preventing reset', {
+          currentStep: state.currentStep,
+          onboardingChecked: state.onboardingChecked
+        })
+      }
+      return
+    }
+
+    // Debug logging to track initialization
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🚀 [Onboarding] Initializing onboarding flow', {
+        currentStep: state.currentStep,
+        onboardingChecked: state.onboardingChecked,
+        profile: profile ? { first_name: profile.first_name, last_name: profile.last_name } : null
+      })
+    }
+
     // Always start from beginning for profile setup (slim flow)
     setState(prev => ({ 
       ...prev, 
       onboardingChecked: true,
+      currentStep: 0, // Explicitly start at step 0
       firstName: profile?.first_name || '',
       lastName: profile?.last_name || '',
       userName: profile?.first_name ? 
         profile.first_name + (profile.last_name ? ` ${profile.last_name}` : '') : ''
     }))
-  }, [user, profile, onboardingStatus, state.onboardingChecked])
+  }, [user, profile, onboardingStatus, state.onboardingChecked, state.currentStep, state.flowCompleted])
 
   // Handle voice transcript for name input
   const handleVoiceTranscript = useCallback(async (transcript: string, isFinal: boolean) => {
@@ -235,9 +300,9 @@ export function useOnboardingFlow() {
     }
   }, [user, state.firstName, state.lastName, extractName, updateProfileMutation])
 
-  // Handle next step logic for slim profile flow
+  // Handle next step logic for new onboarding flow
   const handleNext = useCallback(async () => {
-    if (state.currentStep === 0 && (state.userName.trim() || (state.firstName && state.firstName.trim()))) {
+    if (state.currentStep === 1 && (state.userName.trim() || (state.firstName && state.firstName.trim()))) {
       // Process name input
       if (state.firstName && !state.userName.trim()) {
         setState(prev => ({
@@ -295,17 +360,17 @@ export function useOnboardingFlow() {
         }
       }
       
-      setState(prev => ({ ...prev, currentStep: 1, showInput: false }))
+      setState(prev => ({ ...prev, currentStep: 2, showInput: false }))
     } else if (state.currentStep < onboardingSteps.length - 1) {
       setState(prev => ({ ...prev, currentStep: state.currentStep + 1 }))
     }
-    // Final step (profile_complete) will be handled by navigation to goal creation
+    // Final step will be handled by navigation to dashboard
   }, [state, user, extractName, updateProfileMutation])
 
-  // Auto-advance for non-input steps (slim flow)
+  // Auto-advance for non-input steps
   const shouldAutoAdvance = useCallback(() => {
-    const inputSteps = [0] // Only welcome step requires input in slim flow
-    return state.currentStep > 0 && !inputSteps.includes(state.currentStep)
+    const inputSteps = [1] // Only name_input step requires input
+    return !inputSteps.includes(state.currentStep)
   }, [state.currentStep])
 
   // Update state functions
@@ -331,7 +396,7 @@ export function useOnboardingFlow() {
       state.firstName
     ),
     currentStepData: onboardingSteps[state.currentStep],
-    isInputStep: [0].includes(state.currentStep), // Only welcome step in slim flow
+    isInputStep: [1].includes(state.currentStep), // Only name_input step requires input
     isLastStep: state.currentStep === onboardingSteps.length - 1,
     profile,
     onboardingStatus

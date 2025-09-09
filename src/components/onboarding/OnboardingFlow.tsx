@@ -6,7 +6,8 @@ import { onboardingSteps } from '@/src/hooks/useOnboarding'
 import { useOnboardingContext } from './OnboardingProvider'
 import { useCoach } from '@/src/contexts/CoachContext'
 import { WelcomeStep } from './WelcomeStep'
-import { ProfileCompleteStep } from './ProfileCompleteStep'
+import { NameInputStep } from './NameInputStep'
+import { TextOnlyStep } from './TextOnlyStep'
 
 export function OnboardingFlow() {
   const {
@@ -22,12 +23,24 @@ export function OnboardingFlow() {
     const stepId = currentStepData?.id
 
     switch (stepId) {
-      case 'welcome':
+      case 'greeting':
         return <WelcomeStep />
-      case 'profile_complete':
-        return <ProfileCompleteStep />
+      case 'name_input':
+        return <NameInputStep />
+      case 'personal_welcome':
+        return <TextOnlyStep />
+      case 'ava_introduction':
+        return <TextOnlyStep />
+      case 'growth_message':
+        return <TextOnlyStep />
+      case 'statistics':
+        return <TextOnlyStep />
+      case 'reassurance':
+        return <TextOnlyStep />
+      case 'mission_statement':
+        return <TextOnlyStep />
       default:
-        return <WelcomeStep />
+        return <TextOnlyStep />
     }
   }
 
@@ -41,7 +54,7 @@ export function OnboardingFlow() {
     return (
       <IntroScreen
         title="Welcome to NeuraCoach!"
-        description="I'm your AI coach, here to guide you through a personalized experience. We'll start by getting to know you better, then help you set up goals that matter to you."
+        description="I'm Ava, your AI coach. I'll guide you through a personalized journey to help you grow and achieve your goals in a way no other platform has done before."
         onStart={handleStart}
       />
     )

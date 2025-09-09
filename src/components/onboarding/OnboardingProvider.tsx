@@ -3,9 +3,9 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/src/contexts/AuthContext'
+import { useCoach } from '@/src/contexts/CoachContext'
 import { useOnboardingFlow, OnboardingState, OnboardingStep, OnboardingStatus } from '@/src/hooks/useOnboarding'
 import { Profile } from '@/src/hooks/useProfile'
-import { getCoachSpeakingTime, logSpeakingTimeDebug } from '@/src/lib/speech-timing'
 
 interface OnboardingContextType {
   state: OnboardingState
@@ -40,6 +40,7 @@ interface OnboardingProviderProps {
 
 export function OnboardingProvider({ children }: OnboardingProviderProps) {
   const { user, loading } = useAuth()
+  const { isSpeaking, isPreparingSpeech } = useCoach()
   const router = useRouter()
   const onboardingFlow = useOnboardingFlow()
   const [showIntro, setShowIntro] = useState(true)
@@ -57,47 +58,59 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
   }, [onboardingFlow.initializeStep])
 
   // Check if user should be redirected away from onboarding
+  // Only check this initially, not during the active flow to prevent premature redirects
   useEffect(() => {
     if (!user || loading || !onboardingFlow.state.onboardingChecked || !onboardingFlow.onboardingStatus) return
 
-    // If no onboarding needed, redirect to dashboard
-    if (!onboardingFlow.onboardingStatus.shouldRedirectToOnboarding) {
+    // Only redirect if we haven't started the onboarding flow yet (showIntro is still true)
+    // and if no onboarding is needed
+    if (showIntro && !onboardingFlow.onboardingStatus.shouldRedirectToOnboarding) {
       router.push('/dashboard')
       return
     }
-  }, [user, loading, onboardingFlow.state.onboardingChecked, onboardingFlow.onboardingStatus, router])
+  }, [user, loading, onboardingFlow.state.onboardingChecked, onboardingFlow.onboardingStatus, router, showIntro])
 
   const startFlow = () => {
     setShowIntro(false)
   }
 
-  // Auto-advance logic for non-input steps
+  // Auto-advance logic for non-input steps - wait for speech completion
   useEffect(() => {
     if (!showIntro && onboardingFlow.shouldAutoAdvance()) {
-      // Calculate speaking time based on the current step's text content
-      const currentText = onboardingFlow.getCurrentText()
-      const currentSubtext = onboardingFlow.currentStepData?.subtext
-      const speakingTime = getCoachSpeakingTime(currentText, currentSubtext)
-      
-      // Log timing for debugging
       if (process.env.NODE_ENV === 'development') {
-        logSpeakingTimeDebug(currentText, currentSubtext)
+        console.log('⏱️ [Auto-advance] Monitoring speech for step', {
+          currentStep: onboardingFlow.state.currentStep,
+          stepId: onboardingFlow.currentStepData?.id,
+          isLastStep: onboardingFlow.isLastStep,
+          isSpeaking,
+          isPreparingSpeech
+        })
       }
       
-      const timer = setTimeout(async () => {
-        if (onboardingFlow.isLastStep) {
-          // Wait a moment to ensure all mutations have completed and caches are invalidated
-          await new Promise(resolve => setTimeout(resolve, 200))
-          // After profile onboarding, go to dashboard
-          router.push('/dashboard')
-        } else {
+      // Wait for speech to complete, then advance after a short delay
+      // BUT don't auto-advance on the last step - let user click the button
+      if (!isSpeaking && !isPreparingSpeech && !onboardingFlow.isLastStep) {
+        const timer = setTimeout(async () => {
+          if (process.env.NODE_ENV === 'development') {
+            console.log('⏱️ [Auto-advance] Speech completed, advancing step', {
+              currentStep: onboardingFlow.state.currentStep,
+              stepId: onboardingFlow.currentStepData?.id,
+              isLastStep: onboardingFlow.isLastStep
+            })
+          }
+          
           onboardingFlow.setCurrentStep(onboardingFlow.state.currentStep + 1)
+        }, 1000) // Short 1 second delay after speech completes
+        
+        return () => {
+          if (process.env.NODE_ENV === 'development') {
+            console.log('⏱️ [Auto-advance] Clearing completion timer for step', onboardingFlow.state.currentStep)
+          }
+          clearTimeout(timer)
         }
-      }, speakingTime)
-      
-      return () => clearTimeout(timer)
+      }
     }
-  }, [onboardingFlow, router, showIntro])
+  }, [onboardingFlow.state.currentStep, router, showIntro, isSpeaking, isPreparingSpeech])
 
   if (loading) {
     return (

@@ -14,10 +14,10 @@
  */
 export function calculateSpeakingTime(
   text: string,
-  wordsPerMinute: number = 150,
-  minimumTime: number = 2000,
-  maximumTime: number = 15000,
-  bufferMultiplier: number = 1.5
+  wordsPerMinute: number = 250,
+  minimumTime: number = 1000,
+  maximumTime: number = 10000,
+  bufferMultiplier: number = 0
 ): number {
   if (!text || text.trim().length === 0) {
     return minimumTime
@@ -71,7 +71,7 @@ export function getCoachSpeakingTime(text: string, subtext?: string): number {
   return calculateSpeakingTime(
     fullText,
     140, // words per minute
-    3000, // minimum 3 seconds
+    2000, // minimum 2 seconds
     20000, // maximum 20 seconds
     1.8 // 80% buffer for AI voice timing
   )

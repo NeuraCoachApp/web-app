@@ -90,8 +90,8 @@ export function useUpdateProfile() {
         // Also invalidate to ensure fresh data on next fetch
         queryClient.invalidateQueries({ queryKey: profileKeys.user(user.id) })
         
-        // Invalidate onboarding status since it depends on profile data
-        queryClient.invalidateQueries({ queryKey: onboardingKeys.status(user.id) })
+        // Note: We don't invalidate onboarding status here during onboarding flow
+        // This will be handled manually at the end of onboarding to prevent premature redirects
       }
     },
     onError: (error) => {
