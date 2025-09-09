@@ -110,20 +110,25 @@ interface SpeechProgressCallbacks {
 function getCurrentWordIndex(currentTime: number, duration: number, wordCount: number, playbackRate: number = 0.85): number {
   if (duration === 0 || wordCount === 0) return 0
   
-  // The actual audio duration is what we get from the audio element
-  // No need to adjust for playback rate since currentTime already accounts for it
+  // Calculate progress through the audio
   const progress = currentTime / duration
-  const wordIndex = Math.floor(progress * wordCount)
+  
+  // Show words slightly ahead of the audio for more natural reading experience
+  // This gives users time to read before hearing the word
+  const leadTime = 0.1 // 100ms ahead
+  const adjustedProgress = Math.min(1, progress + leadTime)
+  const wordIndex = Math.floor(adjustedProgress * wordCount)
   
   // Add some debug logging to help troubleshoot
   if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
     console.log(`Audio progress: ${currentTime.toFixed(2)}/${duration.toFixed(2)} (${(progress * 100).toFixed(1)}%) -> word ${wordIndex}/${wordCount}`)
   }
   
-  return Math.min(wordIndex, wordCount - 1)
+  return Math.min(Math.max(0, wordIndex), wordCount - 1)
 }
 
 // Utility function to split text into words while preserving spacing
+// This MUST match the splitting logic in RealTimeCaptions.tsx
 function splitTextIntoWords(text: string): string[] {
   return text.split(/(\s+)/).filter(part => part.length > 0)
 }
