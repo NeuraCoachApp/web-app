@@ -90,8 +90,7 @@ export class AudioAnalyzer {
       if (!this.analyserNode || !this.dataArray || !this.currentAudio) return
 
       // Get frequency data
-      this.analyserNode.getByteFrequencyData(this.dataArray)
-      
+      this.analyserNode.getByteFrequencyData(this.dataArray as Uint8Array)      
       // Calculate volume (RMS of all frequency data)
       let sum = 0
       for (let i = 0; i < this.dataArray.length; i++) {
