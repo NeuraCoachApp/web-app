@@ -44,7 +44,7 @@ export class AudioAnalyzer {
       
       // Create data array for frequency data
       const bufferLength = this.analyserNode.frequencyBinCount
-      this.dataArray = new Uint8Array(bufferLength)
+      this.dataArray = new Uint8Array(new ArrayBuffer(bufferLength))
       
       this.isInitialized = true
     } catch (error) {
