@@ -30,45 +30,27 @@ export interface GoalCreationStatus {
 // Goal creation flow steps
 export const goalCreationSteps: GoalCreationStep[] = [
   {
-    id: 'anxiety',
-    text: "If you have anxiety, you're not alone.",
-    subtext: "",
-    personality: "empathetic and understanding"
-  },
-  {
-    id: 'stats',
-    text: "Over 8% of adults in the US alone report symptoms.",
-    subtext: "",
-    personality: "informative but gentle"
-  },
-  {
-    id: 'not_alone',
-    text: "Know you are not alone.",
-    subtext: "",
-    personality: "reassuring and supportive"
-  },
-  {
-    id: 'understanding',
-    text: "We'll help you understand your anxiety and find tools to control it - through daily check-ins, one small step at a time.",
-    subtext: "",
-    personality: "hopeful and motivating"
-  },
-  {
     id: 'questions_before',
-    text: "Before we start, I have a few questions.",
+    text: "Before we start, I had a few questions.",
     subtext: "",
     personality: "gentle and curious"
   },
   {
     id: 'questions_time',
-    text: "So tell me ______",
-    subtext: "What brings you to me today?",
+    text: "So tell me, what brings you to me today?",
+    subtext: "",
     personality: "caring and attentive"
   },
   {
+    id: 'acknowledgment',
+    text: "I hear you. We can definitely work on that.",
+    subtext: "",
+    personality: "understanding and supportive"
+  },
+  {
     id: 'goal_setup',
-    text: "What would you like to work on?",
-    subtext: "Tell me your main goal or what you'd like to achieve.",
+    text: "What are your goals?",
+    subtext: "Examples: Productivity, Focus, Health, Confidence",
     personality: "supportive and focused"
   },
   {
@@ -79,19 +61,19 @@ export const goalCreationSteps: GoalCreationStep[] = [
   },
   {
     id: 'daily_checkins',
-    text: "People who check in daily see an increase in mood 5x faster than those who do not check in regularly.",
+    text: "Note that people who check in daily see progress and mindset shifts faster than those who do not check in regularly.",
     subtext: "",
     personality: "encouraging and factual"
   },
   {
-    id: 'weekly_sessions',
+    id: 'results_timeline',
     text: "Many people see results in as little as 2 weeks!",
     subtext: "",
     personality: "optimistic and motivating"
   },
   {
     id: 'final',
-    text: "Alright ______, that's all the talking for now. Let's get started!",
+    text: "Alright, that's all the talking I'll do for now. Let's get started!",
     subtext: "",
     personality: "excited and ready"
   }
@@ -228,9 +210,9 @@ export function useGoalCreationFlow() {
 
   // Handle next step logic for goal creation flow
   const handleNext = useCallback(async () => {
-    if (state.currentStep === 5 && state.reason.trim()) { // questions_time step
-      setState(prev => ({ ...prev, currentStep: 6 }))
-    } else if (state.currentStep === 6 && state.goal.trim()) { // goal_setup step
+    if (state.currentStep === 1 && state.reason.trim()) { // questions_time step
+      setState(prev => ({ ...prev, currentStep: 2 }))
+    } else if (state.currentStep === 3 && state.goal.trim()) { // goal_setup step
       // Save the goal and wait for completion
       if (user && state.goal.trim()) {
         try {
@@ -241,18 +223,21 @@ export function useGoalCreationFlow() {
           console.warn('Failed to save goal:', error)
         }
       }
-      setState(prev => ({ ...prev, currentStep: 7 }))
-    } else if (state.currentStep === 7) { // notification_time step
-      setState(prev => ({ ...prev, currentStep: 8 }))
+      setState(prev => ({ ...prev, currentStep: 4 }))
+    } else if (state.currentStep === 4) { // notification_time step
+      setState(prev => ({ ...prev, currentStep: 5 }))
     } else if (state.currentStep < goalCreationSteps.length - 1) {
       setState(prev => ({ ...prev, currentStep: state.currentStep + 1 }))
     }
   }, [state, user, createGoalMutation])
 
-  // Auto-advance for non-input steps
+  // Auto-advance for non-input steps (but not the final step)
   const shouldAutoAdvance = useCallback(() => {
-    const inputSteps = [5, 6, 7] // questions_time (reason), goal_setup, notification_time
-    return state.currentStep >= 0 && !inputSteps.includes(state.currentStep)
+    const inputSteps = [1, 3, 4] // questions_time (reason), goal_setup, notification_time
+    const finalStep = goalCreationSteps.length - 1 // Don't auto-advance the final step
+    return state.currentStep >= 0 && 
+           !inputSteps.includes(state.currentStep) && 
+           state.currentStep !== finalStep
   }, [state.currentStep])
 
   // Update state functions
@@ -276,7 +261,7 @@ export function useGoalCreationFlow() {
       profile?.first_name || undefined
     ),
     currentStepData: goalCreationSteps[state.currentStep],
-    isInputStep: [5, 6, 7].includes(state.currentStep), // questions_time, goal_setup, notification_time
+    isInputStep: [1, 3, 4].includes(state.currentStep), // questions_time, goal_setup, notification_time
     isLastStep: state.currentStep === goalCreationSteps.length - 1,
     profile,
     goalCreationStatus

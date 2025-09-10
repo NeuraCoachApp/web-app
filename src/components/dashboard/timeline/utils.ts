@@ -30,10 +30,4 @@ export function logTimelineDebugInfo(goals: Goal[], selectedGoalIndex: number, c
   console.log('🎨 [GoalTimeline] Sorted steps count:', sortedSteps.length)
   console.log('🎨 [GoalTimeline] Current step index:', currentStepIndex)
   console.log('🎨 [GoalTimeline] All steps completed:', allStepsCompleted)
-  
-  sortedSteps.forEach((step, index) => {
-    const isCompleted = step.isCompleted()
-    const isFuture = index > currentStepIndex && !isCompleted
-    console.log(`📋 [GoalTimeline] Step ${index + 1}: ${isCompleted ? '✅' : '⭕'} ${isFuture ? '🔮' : '🎯'} ${step.text.substring(0, 30)}... (Next: ${step.next_step?.substring(0, 8) || 'null'}, Sessions: ${step.getSessions().length})`)
-  })
 }

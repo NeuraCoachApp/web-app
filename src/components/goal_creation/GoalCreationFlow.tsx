@@ -5,11 +5,10 @@ import { FlowLayout, IntroScreen } from '@/src/components/voice'
 import { goalCreationSteps } from '@/src/hooks/goalCreation/useGoalCreation'
 import { useGoalCreationContext } from './GoalCreationProvider'
 import { useCoach } from '@/src/contexts/CoachContext'
-import { GoalReasonStep } from './GoalReasonStep'
-import { GoalSetupStep } from './GoalSetupStep'
-import { GoalNotificationStep } from './GoalNotificationStep'
-import { GoalTextOnlyStep } from './GoalTextOnlyStep'
-import { GoalFinalStep } from './GoalFinalStep'
+import { ReasonInputStep } from './ReasonInputStep'
+import { GoalInputStep } from './GoalInputStep'
+import { NotificationInputStep } from './NotificationInputStep'
+import { TextOnlyStep } from './TextOnlyStep'
 
 export function GoalCreationFlow() {
   const {
@@ -27,15 +26,13 @@ export function GoalCreationFlow() {
 
     switch (stepId) {
       case 'questions_time':
-        return <GoalReasonStep />
+        return <ReasonInputStep />
       case 'goal_setup':
-        return <GoalSetupStep />
+        return <GoalInputStep />
       case 'notification_time':
-        return <GoalNotificationStep />
-      case 'final':
-        return <GoalFinalStep />
+        return <NotificationInputStep />
       default:
-        return <GoalTextOnlyStep />
+        return <TextOnlyStep />
     }
   }
 

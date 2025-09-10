@@ -196,18 +196,9 @@ export function useUserGoals(userId?: string) {
     queryKey: goalsKeys.user(userId || ''),
     queryFn: async (): Promise<Goal[]> => {
       if (!userId) {
-        console.log('🎯 [useUserGoals] No user ID provided')
         return []
       }
       
-      // First check for mock data
-      const mockGoals = getMockGoals(userId)
-      if (mockGoals.length > 0) {
-        console.log('🎭 [useUserGoals] Using mock goals:', { userId, goalCount: mockGoals.length })
-        return mockGoals
-      }
-      
-      console.log('🎯 [useUserGoals] Fetching real goals for user:', userId)
       const goals = await fetchUserGoalsWithDetails(userId)
       
       console.log('✅ [useUserGoals] Successfully fetched goals:', { userId, goalCount: goals.length })
@@ -231,25 +222,7 @@ export function useSessions(userId?: string) {
         return []
       }
       
-      // First check for mock data
-      const mockSessions = getMockSessions(userId)
-      if (mockSessions.length > 0) {
-        console.log('🎭 [useSessions] Using mock sessions:', { userId, sessionCount: mockSessions.length })
-        // Convert mock sessions to Session class instances if needed
-        return mockSessions.map(mockSession => {
-          const session = new Session({
-            uuid: `mock-${Date.now()}-${Math.random()}`,
-            created_at: mockSession.created_at,
-            goal_uuid: mockSession.goal.uuid,
-            insight_uuid: mockSession.insight.uuid,
-            user_uuid: userId
-          })
-          // Set relations would need to be implemented based on mock data structure
-          return session
-        })
-      }
-      
-      console.log('📊 [useSessions] Fetching real sessions for user:', userId)
+      console.log('📊 [useSessions] Fetching real sessions for user (RLS enforced):', userId)
       const sessions = await fetchUserSessions(userId)
       
       console.log('✅ [useSessions] Successfully fetched sessions:', { userId, sessionCount: sessions.length })

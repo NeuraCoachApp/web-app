@@ -9,6 +9,8 @@ export default function StepSquare({
   allStepsCompleted, 
   onStepClick 
 }: StepSquareProps) {
+  // Null safety checks for step properties
+  const stepText = step.text || 'Untitled Step'
   const isEven = stepIndex % 2 === 0
   const hasSessions = step.getSessions().length > 0
   const isCompleted = step.isCompleted()
@@ -88,7 +90,7 @@ export default function StepSquare({
                 ? 'text-card-foreground/50' 
                 : 'text-card-foreground'
             }`}>
-              {step.text.length > 45 ? `${step.text.substring(0, 45)}...` : step.text}
+              {stepText.length > 45 ? `${stepText.substring(0, 45)}...` : stepText}
             </p>
           </div>
         </div>

@@ -70,27 +70,32 @@ export function GoalCreationProvider({ children }: GoalCreationProviderProps) {
     setShowIntro(false)
   }
 
-  // Auto-advance logic for non-input steps
+  // Auto-advance logic for non-input steps - wait for speech completion
   useEffect(() => {
     if (!showIntro && goalCreationFlow.shouldAutoAdvance()) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('⏱️ [Auto-advance] Monitoring speech for step', {
+          currentStep: goalCreationFlow.state.currentStep,
+          stepId: goalCreationFlow.currentStepData?.id,
+          isLastStep: goalCreationFlow.isLastStep
+        })
+      }
+      
       // Calculate speaking time based on the current step's text content
       const currentText = goalCreationFlow.getCurrentText()
       const currentSubtext = goalCreationFlow.currentStepData?.subtext
       const speakingTime = getCoachSpeakingTime(currentText, currentSubtext)
       
       const timer = setTimeout(async () => {
-        if (goalCreationFlow.isLastStep) {
-          // Wait a moment to ensure all mutations have completed and caches are invalidated
-          await new Promise(resolve => setTimeout(resolve, 200))
-          router.push('/dashboard')
-        } else {
+        if (!goalCreationFlow.isLastStep) {
           goalCreationFlow.setCurrentStep(goalCreationFlow.state.currentStep + 1)
         }
+        // For the last step, don't auto-redirect - let the TextOnlyStep component handle it
       }, speakingTime)
       
       return () => clearTimeout(timer)
     }
-  }, [goalCreationFlow, router, showIntro])
+  }, [goalCreationFlow.state.currentStep, router, showIntro])
 
   if (!user) {
     return null

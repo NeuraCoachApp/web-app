@@ -5,11 +5,16 @@
 CREATE OR REPLACE FUNCTION get_user_goals_with_details(p_user_uuid UUID)
 RETURNS JSON
 LANGUAGE plpgsql
-SECURITY DEFINER
+SECURITY INVOKER
 AS $$
 DECLARE
     result JSON;
 BEGIN
+    -- Verify the requesting user matches the authenticated user
+    IF p_user_uuid != auth.uid() THEN
+        RETURN '[]'::json;
+    END IF;
+    
     WITH goal_data AS (
         SELECT 
             g.uuid,
@@ -20,15 +25,14 @@ BEGIN
                 JSON_BUILD_OBJECT(
                     'uuid', s.uuid,
                     'text', s.text,
-                    'isCompleted', s.isCompleted,
+                    'isCompleted', s."isCompleted",
                     'created_at', s.created_at,
                     'end_at', s.end_at,
                     'next_step', s.next_step,
                     'sessions', COALESCE(step_sessions.sessions, '[]'::json)
                 ) ORDER BY gs.id
             ) AS steps
-        FROM user_goal ug
-        JOIN goal g ON g.uuid = ug.goal_uuid
+        FROM goal g  -- Start with goal table so RLS policy applies
         LEFT JOIN goal_steps gs ON gs.goal_uuid = g.uuid
         LEFT JOIN step s ON s.uuid = gs.step_uuid
         LEFT JOIN LATERAL (
@@ -54,7 +58,7 @@ BEGIN
             JOIN insight i ON i.uuid = sess.insight_uuid
             WHERE i.step_uuid = s.uuid
         ) step_sessions ON true
-        WHERE ug.user_uuid = p_user_uuid
+        -- RLS policy on goal table will automatically filter by user ownership
         GROUP BY g.uuid, g.text, g.created_at, g.end_at
         ORDER BY g.created_at DESC
     )
@@ -77,7 +81,7 @@ $$;
 CREATE OR REPLACE FUNCTION get_goal_with_details(p_goal_uuid UUID)
 RETURNS JSON
 LANGUAGE plpgsql
-SECURITY DEFINER
+SECURITY INVOKER
 AS $$
 DECLARE
     result JSON;
@@ -92,7 +96,7 @@ BEGIN
                 JSON_BUILD_OBJECT(
                     'uuid', s.uuid,
                     'text', s.text,
-                    'isCompleted', s.isCompleted,
+                    'isCompleted', s."isCompleted",
                     'created_at', s.created_at,
                     'end_at', s.end_at,
                     'next_step', s.next_step,
@@ -145,7 +149,7 @@ $$;
 CREATE OR REPLACE FUNCTION get_user_sessions(p_user_uuid UUID)
 RETURNS JSON
 LANGUAGE plpgsql
-SECURITY DEFINER
+SECURITY INVOKER
 AS $$
 DECLARE
     result JSON;
@@ -195,7 +199,7 @@ CREATE OR REPLACE FUNCTION create_session_with_insight(
 )
 RETURNS JSON
 LANGUAGE plpgsql
-SECURITY DEFINER
+SECURITY INVOKER
 AS $$
 DECLARE
     new_insight_uuid UUID;
@@ -248,7 +252,7 @@ $$;
 CREATE OR REPLACE FUNCTION get_goal_progress_summary(p_goal_uuid UUID)
 RETURNS JSON
 LANGUAGE plpgsql
-SECURITY DEFINER
+SECURITY INVOKER
 AS $$
 DECLARE
     result JSON;
@@ -257,7 +261,7 @@ BEGIN
         SELECT 
             s.uuid,
             s.text,
-            s.isCompleted,
+            s."isCompleted",
             CASE 
                 WHEN EXISTS (
                     SELECT 1 FROM session sess
@@ -275,7 +279,7 @@ BEGIN
         LEFT JOIN session sess ON sess.goal_uuid = gs.goal_uuid
         LEFT JOIN insight i ON i.uuid = sess.insight_uuid AND i.step_uuid = s.uuid
         WHERE gs.goal_uuid = p_goal_uuid
-        GROUP BY s.uuid, s.text, s.isCompleted
+        GROUP BY s.uuid, s.text, s."isCompleted"
     )
     SELECT JSON_BUILD_OBJECT(
         'total_steps', COUNT(*),
@@ -302,7 +306,7 @@ CREATE OR REPLACE FUNCTION get_goal_daily_metrics(
 )
 RETURNS JSON
 LANGUAGE plpgsql
-SECURITY DEFINER
+SECURITY INVOKER
 AS $$
 DECLARE
     result JSON;
@@ -337,6 +341,28 @@ BEGIN
     RETURN COALESCE(result, '[]'::json);
 END;
 $$;
+
+-- Row Level Security Policies
+-- Enable RLS on all relevant tables
+ALTER TABLE goal ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_goal ENABLE ROW LEVEL SECURITY;
+ALTER TABLE session ENABLE ROW LEVEL SECURITY;
+ALTER TABLE insight ENABLE ROW LEVEL SECURITY;
+ALTER TABLE step ENABLE ROW LEVEL SECURITY;
+ALTER TABLE goal_steps ENABLE ROW LEVEL SECURITY;
+
+-- Note: All RPC functions use SECURITY INVOKER (not SECURITY DEFINER) 
+-- so they respect RLS policies and run with the caller's permissions
+
+-- Create policy that only allows users to access goals they own through user_goal table
+CREATE POLICY "Users can only access their own goals" ON goal
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM user_goal ug 
+            WHERE ug.goal_uuid = goal.uuid 
+            AND ug.user_uuid = auth.uid()
+        )
+    );
 
 -- Grant execute permissions to authenticated users
 GRANT EXECUTE ON FUNCTION get_user_goals_with_details(UUID) TO authenticated;

@@ -75,7 +75,7 @@ export default function PlaceholderTimeline() {
                         {/* Step content */}
                         <div className="flex-1 flex flex-col items-center justify-center text-center">
                           <p className="text-xs font-medium text-muted-foreground/70 leading-tight">
-                            {step.text}
+                            {step.text || 'Untitled Step'}
                           </p>
                         </div>
                       </div>

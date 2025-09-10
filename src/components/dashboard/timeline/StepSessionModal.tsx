@@ -29,7 +29,7 @@ export default function StepSessionModal({ isOpen, onClose, step }: StepSessionM
             )}
             <span className="text-sm text-muted-foreground">Step:</span>
           </div>
-          <p className="text-card-foreground font-medium mb-3">{step.text}</p>
+          <p className="text-card-foreground font-medium mb-3">{step.text || 'Untitled Step'}</p>
           
           {/* Step Deadline */}
           <div className="flex items-center gap-2 text-sm">

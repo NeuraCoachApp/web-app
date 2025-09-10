@@ -39,6 +39,9 @@ export function calculateDayProgress(goal: Goal, date: Date): DayProgress {
   
   // Get steps that were active/assigned for this day (had sessions on this day or are currently active)
   const stepsActiveToday = goal.getSteps().filter(step => {
+    // Check for null values before creating dates
+    if (!step.created_at || !step.end_at) return false
+    
     const stepStartDate = new Date(step.created_at)
     const stepEndDate = new Date(step.end_at)
     const currentDate = new Date(date)

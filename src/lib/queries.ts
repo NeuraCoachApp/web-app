@@ -47,9 +47,11 @@ interface InsightRPCData {
  */
 export async function fetchUserGoalsWithDetails(userId: string): Promise<Goal[]> {
   try {
-    const { data, error } = await supabase.rpc('get_user_goals_with_details' as any, {
+    const { data, error } = await supabase.rpc('get_user_goals_with_details', {
       p_user_uuid: userId
     })
+
+    console.log('🔍 [fetchUserGoalsWithDetails] RPC result:', { data, error })
 
     if (error) {
       console.error('Error fetching user goals with RPC:', error)

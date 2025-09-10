@@ -11,11 +11,11 @@ export class Step {
   private _sessions: Session[] = []
 
   constructor(data: Tables<'step'>) {
-    this.uuid = data.uuid
-    this.text = data.text
-    this.isCompletedFlag = data.isCompleted
-    this.created_at = data.created_at
-    this.end_at = data.end_at
+    this.uuid = data.uuid || ''
+    this.text = data.text || ''
+    this.isCompletedFlag = data.isCompleted || false
+    this.created_at = data.created_at || new Date().toISOString()
+    this.end_at = data.end_at || new Date().toISOString()
     this.next_step = data.next_step
   }
 
@@ -94,6 +94,7 @@ export class Step {
    * Get formatted creation date
    */
   getFormattedCreatedDate(): string {
+    if (!this.created_at) return 'Unknown'
     return new Date(this.created_at).toLocaleDateString()
   }
 
@@ -101,6 +102,7 @@ export class Step {
    * Get formatted end date
    */
   getFormattedEndDate(): string {
+    if (!this.end_at) return 'Unknown'
     return new Date(this.end_at).toLocaleDateString()
   }
 
@@ -108,6 +110,7 @@ export class Step {
    * Check if step is currently active (within date range)
    */
   isActive(): boolean {
+    if (!this.created_at || !this.end_at) return false
     const now = new Date()
     const startDate = new Date(this.created_at)
     const endDate = new Date(this.end_at)
@@ -118,6 +121,7 @@ export class Step {
    * Check if step is overdue
    */
   isOverdue(): boolean {
+    if (!this.end_at) return false
     const now = new Date()
     const endDate = new Date(this.end_at)
     return now > endDate && !this.isCompleted()
@@ -127,6 +131,7 @@ export class Step {
    * Get days remaining until end date
    */
   getDaysRemaining(): number {
+    if (!this.end_at) return 0
     const now = new Date()
     const endDate = new Date(this.end_at)
     const diffTime = endDate.getTime() - now.getTime()
