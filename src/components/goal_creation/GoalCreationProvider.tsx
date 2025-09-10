@@ -92,14 +92,6 @@ export function GoalCreationProvider({ children }: GoalCreationProviderProps) {
     }
   }, [goalCreationFlow, router, showIntro])
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-white">Loading...</div>
-      </div>
-    )
-  }
-
   if (!user) {
     return null
   }

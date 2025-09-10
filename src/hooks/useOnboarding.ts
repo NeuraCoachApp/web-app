@@ -5,6 +5,7 @@ import { useProfile, Profile, useUpdateProfile } from './useProfile'
 import { goalsKeys, useCreateGoal } from './useGoals'
 import { supabase } from '@/src/lib/supabase'
 import { useSpeechRecognition } from '@/src/lib/speech-recognition'
+import { capitalizeWords } from '@/src/lib/utils'
 
 export interface OnboardingStatus {
   needsProfileSetup: boolean
@@ -257,6 +258,7 @@ export function useOnboardingFlow() {
   // Handle voice transcript for name input
   const handleVoiceTranscript = useCallback(async (transcript: string, isFinal: boolean) => {
     if (!isFinal) {
+      // Don't capitalize during real-time transcription to allow natural speech flow
       setState(prev => ({ ...prev, userName: transcript }))
       return
     }
@@ -266,8 +268,8 @@ export function useOnboardingFlow() {
     try {
       const nameResult = extractName(transcript)
       if (nameResult.confidence > 0.3) {
-        const newFirstName = nameResult.firstName || state.firstName
-        const newLastName = nameResult.lastName || state.lastName
+        const newFirstName = capitalizeWords(nameResult.firstName || state.firstName)
+        const newLastName = capitalizeWords(nameResult.lastName || state.lastName)
         
         setState(prev => ({
           ...prev,
@@ -280,30 +282,33 @@ export function useOnboardingFlow() {
         if (user && (nameResult.firstName || nameResult.lastName)) {
           try {
             await updateProfileMutation.mutateAsync({
-              first_name: nameResult.firstName || state.firstName || null,
-              last_name: nameResult.lastName || state.lastName || null
+              first_name: capitalizeWords(nameResult.firstName || state.firstName || '') || null,
+              last_name: capitalizeWords(nameResult.lastName || state.lastName || '') || null
             })
           } catch (error) {
             console.warn('Failed to save profile (database may not be set up):', error)
           }
         }
       } else {
+        // Only capitalize the final transcript, not during typing
         setState(prev => ({
           ...prev,
-          userName: transcript,
+          userName: capitalizeWords(transcript),
           speechError: 'Could not extract first/last name, but kept your input.'
         }))
       }
     } catch (error) {
       console.error('Name extraction error:', error)
-      setState(prev => ({ ...prev, userName: transcript }))
+      setState(prev => ({ ...prev, userName: capitalizeWords(transcript) }))
     }
   }, [user, state.firstName, state.lastName, extractName, updateProfileMutation])
 
   // Handle next step logic for new onboarding flow
   const handleNext = useCallback(async () => {
     if (state.currentStep === 1 && (state.userName.trim() || (state.firstName && state.firstName.trim()))) {
-      // Process name input
+      // Process name input - apply capitalization at submission time
+      const capitalizedUserName = capitalizeWords(state.userName.trim())
+      
       if (state.firstName && !state.userName.trim()) {
         setState(prev => ({
           ...prev,
@@ -315,29 +320,30 @@ export function useOnboardingFlow() {
       let finalLastName: string | null = state.lastName
       
       // Extract names from manual input if needed
-      if (state.userName.trim() && !state.firstName && !state.lastName) {
-        const nameParts = state.userName.trim().split(/\s+/)
+      if (capitalizedUserName && !state.firstName && !state.lastName) {
+        const nameParts = capitalizedUserName.split(/\s+/)
         if (nameParts.length >= 1) {
           finalFirstName = nameParts[0]
-          setState(prev => ({ ...prev, firstName: nameParts[0] }))
+          setState(prev => ({ ...prev, firstName: nameParts[0], userName: capitalizedUserName }))
         }
         if (nameParts.length >= 2) {
           finalLastName = nameParts.slice(1).join(' ')
-          setState(prev => ({ ...prev, lastName: nameParts.slice(1).join(' ') }))
+          setState(prev => ({ ...prev, lastName: nameParts.slice(1).join(' '), userName: capitalizedUserName }))
         }
         
         // Try AI extraction for complex patterns
-        if (nameParts.length === 1 && (state.userName.toLowerCase().includes('name is') || 
-            state.userName.toLowerCase().includes('i am') || state.userName.toLowerCase().includes("i'm"))) {
+        if (nameParts.length === 1 && (capitalizedUserName.toLowerCase().includes('name is') || 
+            capitalizedUserName.toLowerCase().includes('i am') || capitalizedUserName.toLowerCase().includes("i'm"))) {
           try {
-            const nameResult = extractName(state.userName.trim())
+            const nameResult = extractName(capitalizedUserName)
             if (nameResult.confidence > 0.3 && nameResult.firstName !== nameParts[0]) {
-              finalFirstName = nameResult.firstName || null
-              finalLastName = nameResult.lastName || null
+              finalFirstName = capitalizeWords(nameResult.firstName || '') || null
+              finalLastName = capitalizeWords(nameResult.lastName || '') || null
               setState(prev => ({
                 ...prev,
-                firstName: nameResult.firstName || '',
-                lastName: nameResult.lastName || ''
+                firstName: capitalizeWords(nameResult.firstName || ''),
+                lastName: capitalizeWords(nameResult.lastName || ''),
+                userName: capitalizedUserName
               }))
             }
           } catch (error) {

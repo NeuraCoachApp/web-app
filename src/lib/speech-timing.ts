@@ -7,7 +7,7 @@
  * 
  * @param text - The text to be spoken
  * @param wordsPerMinute - Average speaking rate (default: 150 WPM, which is typical for conversational speech)
- * @param minimumTime - Minimum time in milliseconds (default: 2000ms = 2 seconds)
+ * @param minimumTime - Minimum time in milliseconds (default: 1000ms = 1 second)
  * @param maximumTime - Maximum time in milliseconds (default: 15000ms = 15 seconds)
  * @param bufferMultiplier - Buffer multiplier to add extra time (default: 1.5 = 50% extra time)
  * @returns Speaking time in milliseconds
@@ -15,7 +15,7 @@
 export function calculateSpeakingTime(
   text: string,
   wordsPerMinute: number = 150,
-  minimumTime: number = 2000,
+  minimumTime: number = 1000,
   maximumTime: number = 15000,
   bufferMultiplier: number = 1.5
 ): number {
@@ -71,7 +71,7 @@ export function getCoachSpeakingTime(text: string, subtext?: string): number {
   return calculateSpeakingTime(
     fullText,
     200, // words per minute
-    3000, // minimum 3 seconds
+    1000, // minimum 1 second
     20000, // maximum 20 seconds
     1 // 80% buffer for AI voice timing
   )

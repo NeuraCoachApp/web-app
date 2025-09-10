@@ -1,8 +1,9 @@
 'use client'
 
-import React, { createContext, useContext, useState, useCallback, useRef } from 'react'
+import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react'
 import { useVoiceSynthesis } from '@/src/lib/elevenlabs'
 import { useSpeechRecognition } from '@/src/lib/speech-recognition'
+import { getAudioAnalyzer, AudioAnalysisData } from '@/src/lib/audio-analyzer'
 
 interface CoachState {
   isSpeaking: boolean
@@ -13,6 +14,7 @@ interface CoachState {
   currentWordIndex: number
   spokenMessages: Set<string>
   hasUserInteracted: boolean
+  audioAnalysisData: AudioAnalysisData | null
 }
 
 interface CoachContextType extends CoachState {
@@ -40,12 +42,26 @@ export function CoachProvider({ children }: { children: React.ReactNode }) {
     currentMessage: null,
     currentWordIndex: 0,
     spokenMessages: new Set<string>(),
-    hasUserInteracted: false
+    hasUserInteracted: false,
+    audioAnalysisData: null
   })
 
   const { playText, playTextWithProgress, prefetchAudio } = useVoiceSynthesis()
   const { isSupported: speechSupported, listenForName, startListeningWithCallback, stopListening: stopSpeechRecognition, requestPermission } = useSpeechRecognition()
   const currentSpeechRef = useRef<HTMLAudioElement | null>(null)
+  const audioAnalyzer = getAudioAnalyzer()
+  const analysisCleanupRef = useRef<(() => void) | null>(null)
+
+  // Cleanup effect
+  useEffect(() => {
+    return () => {
+      // Clean up audio analysis on unmount
+      if (analysisCleanupRef.current) {
+        analysisCleanupRef.current()
+      }
+      audioAnalyzer.cleanup()
+    }
+  }, [])
 
   const enableVoice = useCallback(() => {
     setState(prev => ({ ...prev, hasVoiceEnabled: true }))
@@ -105,6 +121,15 @@ export function CoachProvider({ children }: { children: React.ReactNode }) {
         onStart: (audio) => {
           // Store reference to current audio for single instance management
           currentSpeechRef.current = audio
+          
+          // Connect audio analyzer for real-time analysis
+          audioAnalyzer.connectToAudio(audio)
+          
+          // Set up audio analysis callback
+          analysisCleanupRef.current = audioAnalyzer.onAnalysisData((analysisData) => {
+            setState(prev => ({ ...prev, audioAnalysisData: analysisData }))
+          })
+          
           setState(prev => {
             const newSpokenMessages = new Set(prev.spokenMessages)
             newSpokenMessages.add(message)
@@ -125,35 +150,61 @@ export function CoachProvider({ children }: { children: React.ReactNode }) {
           }))
         },
         onEnd: () => {
+          // Clean up audio analysis
+          if (analysisCleanupRef.current) {
+            analysisCleanupRef.current()
+            analysisCleanupRef.current = null
+          }
+          audioAnalyzer.disconnect()
+          
           setState(prev => ({ 
             ...prev, 
             isSpeaking: false, 
             isPreparingSpeech: false,
             currentMessage: null,
-            currentWordIndex: 0
+            currentWordIndex: 0,
+            audioAnalysisData: null
           }))
           currentSpeechRef.current = null
         },
         onError: (error) => {
           console.warn('Voice synthesis failed:', error)
+          
+          // Clean up audio analysis
+          if (analysisCleanupRef.current) {
+            analysisCleanupRef.current()
+            analysisCleanupRef.current = null
+          }
+          audioAnalyzer.disconnect()
+          
           setState(prev => ({ 
             ...prev, 
             isSpeaking: false, 
             isPreparingSpeech: false,
             currentMessage: null,
-            currentWordIndex: 0
+            currentWordIndex: 0,
+            audioAnalysisData: null
           }))
           currentSpeechRef.current = null
         }
       })
     } catch (error) {
       console.warn('Voice synthesis failed:', error)
+      
+      // Clean up audio analysis
+      if (analysisCleanupRef.current) {
+        analysisCleanupRef.current()
+        analysisCleanupRef.current = null
+      }
+      audioAnalyzer.disconnect()
+      
       setState(prev => ({ 
         ...prev, 
         isSpeaking: false, 
         isPreparingSpeech: false,
         currentMessage: null,
-        currentWordIndex: 0
+        currentWordIndex: 0,
+        audioAnalysisData: null
       }))
       currentSpeechRef.current = null
     }
@@ -226,12 +277,21 @@ export function CoachProvider({ children }: { children: React.ReactNode }) {
       }
       currentSpeechRef.current = null
     }
+    
+    // Clean up audio analysis
+    if (analysisCleanupRef.current) {
+      analysisCleanupRef.current()
+      analysisCleanupRef.current = null
+    }
+    audioAnalyzer.disconnect()
+    
     setState(prev => ({ 
       ...prev, 
       isSpeaking: false, 
       isPreparingSpeech: false,
       currentMessage: null,
-      currentWordIndex: 0
+      currentWordIndex: 0,
+      audioAnalysisData: null
     }))
   }, [])
 

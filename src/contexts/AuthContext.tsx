@@ -1,6 +1,6 @@
 'use client'
 
-import React, { createContext, useContext, useEffect, useRef, useState } from 'react'
+import React, { createContext, useContext, useEffect, useRef, useState, useMemo } from 'react'
 import { User, Session, AuthChangeEvent } from '@supabase/supabase-js'
 import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/src/lib/supabase'
@@ -22,17 +22,12 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [session, setSession] = useState<Session | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [sessionLoaded, setSessionLoaded] = useState(false)
   const queryClient = useQueryClient()
 
-  const loadStack = {
-    sessionLoaded: useRef(false),
-  }
-
-  const checkLoadedState = () => {
-    const allLoaded = Object.values(loadStack).every(ref => ref.current)
-    setLoading(!allLoaded)
-  }
+  const loading = useMemo(() => {
+    return !sessionLoaded
+  }, [sessionLoaded])
 
   const invalidateUserData = (userId: string) => {
     // Invalidate all user-related queries when auth changes
@@ -62,17 +57,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
         if (!supabaseUrl || supabaseUrl.includes('placeholder')) {
           console.warn('Supabase not configured - auth will not work')
-          loadStack.sessionLoaded.current = true
-          checkLoadedState()
+          setSessionLoaded(true)
           return
         }
 
         const { data: { session }, error } = await supabase.auth.getSession()
-        loadStack.sessionLoaded.current = true
+        setSessionLoaded(true)
         
         if (error) {
           console.error('Error getting session:', error)
-          checkLoadedState()
           return
         }
 
@@ -82,18 +75,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Invalidate user data to trigger fresh fetches
           invalidateUserData(session.user.id)
         }
-        
-        checkLoadedState()
       } catch (error) {
         console.error('Error getting session:', error)
-        loadStack.sessionLoaded.current = true
-        checkLoadedState()
+        setSessionLoaded(true)
       }
     }
 
     const handleAuthChange = async (event: AuthChangeEvent, newSession: Session | null) => {
       try {
-        loadStack.sessionLoaded.current = true
+        setSessionLoaded(true)
         
         if (newSession?.user?.id !== session?.user?.id) {
           setSession(newSession)
@@ -106,12 +96,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // Clear all user data from cache on sign out
             queryClient.clear()
           }
-          
-          checkLoadedState()
         }
       } catch (error) {
         console.error('Error in auth state change:', error)
-        checkLoadedState()
       }
     }
 

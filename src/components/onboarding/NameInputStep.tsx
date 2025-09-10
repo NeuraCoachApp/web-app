@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react'
 import { FlowStep, FlowStepText, FlowStepButton, FlowInput } from '@/src/components/voice'
 import { useOnboardingContext } from './OnboardingProvider'
 import { useCoach } from '@/src/contexts/CoachContext'
+import { capitalizeWords } from '@/src/lib/utils'
 
 export function NameInputStep() {
   const {

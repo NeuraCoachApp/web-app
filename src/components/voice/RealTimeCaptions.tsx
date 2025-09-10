@@ -143,10 +143,10 @@ export function RealTimeCaptions({
   }
 
   return (
-    <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none z-10">
-      <div className="max-w-2xl mx-auto px-6 py-3 text-center min-h-[60px] flex items-center justify-center">
+    <div className="w-[70%] h-full flex items-center justify-center">
+      <div className="max-w-lg mx-auto px-4 py-3 text-center min-h-[60px] flex items-center justify-center">
         {isVisible && (
-          <div className={`text-gray-200 text-sm md:text-base leading-relaxed italic ${className}`}>
+          <div className={`text-gray-200 text-lg md:text-xl leading-relaxed italic ${className}`}>
             {renderWords()}
           </div>
         )}

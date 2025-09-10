@@ -86,8 +86,17 @@ export function FlowLayout({
   return (
     <div className={`min-h-screen bg-black text-white flex flex-col relative items-center justify-center px-4 ${className}`}>
       <div className="max-w-2xl w-full text-center space-y-8">
-        {/* Coach Blob */}
-        <CoachBlob size={blobSize} className="mb-8" />
+        {/* Coach Blob with Captions Overlay */}
+        <div className="relative mb-8">
+          <CoachBlob size={blobSize} />
+          
+          {/* Real-time Captions positioned over the blob */}
+          {showCaptions && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
+              <RealTimeCaptions stepKey={stepKey} />
+            </div>
+          )}
+        </div>
 
         {/* Content */}
         <AnimatePresence mode="wait">
@@ -95,12 +104,6 @@ export function FlowLayout({
             {children}
           </div>
         </AnimatePresence>
-
-
-        {/* Real-time Captions */}
-        {showCaptions && (
-          <RealTimeCaptions stepKey={stepKey} />
-        )}
       </div>
     </div>
   )
