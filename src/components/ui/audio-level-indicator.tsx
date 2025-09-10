@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { AudioAnalysisData } from '@/src/lib/audio-analyzer'
+import { AudioAnalysisData } from '@/src/lib/audio/audio-analyzer'
 
 interface AudioLevelIndicatorProps {
   isActive?: boolean

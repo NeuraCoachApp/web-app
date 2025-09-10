@@ -1,9 +1,9 @@
 'use client'
 
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react'
-import { useVoiceSynthesis } from '@/src/lib/elevenlabs'
-import { useSpeechRecognition } from '@/src/lib/speech-recognition'
-import { getAudioAnalyzer, AudioAnalysisData } from '@/src/lib/audio-analyzer'
+import { useVoiceSynthesis } from '@/src/lib/audio/elevenlabs'
+import { useSpeechRecognition } from '@/src/lib/audio/speech-recognition'
+import { getAudioAnalyzer, AudioAnalysisData } from '@/src/lib/audio/audio-analyzer'
 
 interface CoachState {
   isSpeaking: boolean

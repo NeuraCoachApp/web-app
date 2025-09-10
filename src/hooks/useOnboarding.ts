@@ -4,7 +4,7 @@ import { useAuth } from '@/src/contexts/AuthContext'
 import { useProfile, Profile, useUpdateProfile } from './useProfile'
 import { goalsKeys, useCreateGoal } from './useGoals'
 import { supabase } from '@/src/lib/supabase'
-import { useSpeechRecognition } from '@/src/lib/speech-recognition'
+import { useSpeechRecognition } from '@/src/lib/audio/speech-recognition'
 import { capitalizeWords } from '@/src/lib/utils'
 
 export interface OnboardingStatus {

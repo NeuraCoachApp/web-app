@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/src/contexts/AuthContext'
 import { useGoalCreationFlow, GoalCreationState, GoalCreationStep, GoalCreationStatus } from '@/src/hooks/goalCreation/useGoalCreation'
 import { Profile } from '@/src/hooks/useProfile'
-import { getCoachSpeakingTime } from '@/src/lib/speech-timing'
+import { getCoachSpeakingTime } from '@/src/lib/audio/speech-timing'
 
 interface GoalCreationContextType {
   state: GoalCreationState

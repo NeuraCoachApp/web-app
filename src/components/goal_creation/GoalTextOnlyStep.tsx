@@ -4,7 +4,7 @@ import React from 'react'
 import { motion } from 'framer-motion'
 import { FlowStep, FlowStepText } from '@/src/components/voice'
 import { useGoalCreationContext } from './GoalCreationProvider'
-import { getCoachSpeakingTime } from '@/src/lib/speech-timing'
+import { getCoachSpeakingTime } from '@/src/lib/audio/speech-timing'
 
 export function GoalTextOnlyStep() {
   const { getCurrentText, currentStepData } = useGoalCreationContext()
