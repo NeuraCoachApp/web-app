@@ -44,7 +44,8 @@ export class AudioAnalyzer {
       
       // Create data array for frequency data
       const bufferLength = this.analyserNode.frequencyBinCount
-      this.dataArray = new Uint8Array(new ArrayBuffer(bufferLength))
+      const buffer = new ArrayBuffer(bufferLength)
+      this.dataArray = new Uint8Array(buffer)
       
       this.isInitialized = true
     } catch (error) {
@@ -90,7 +91,7 @@ export class AudioAnalyzer {
       if (!this.analyserNode || !this.dataArray || !this.currentAudio) return
 
       // Get frequency data
-      this.analyserNode.getByteFrequencyData(this.dataArray)
+      this.analyserNode.getByteFrequencyData(this.dataArray as Uint8Array)
       
       // Calculate volume (RMS of all frequency data)
       let sum = 0
