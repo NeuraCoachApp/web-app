@@ -27,7 +27,10 @@ export function logTimelineDebugInfo(goals: Goal[], selectedGoalIndex: number, c
   console.log('🎨 [GoalTimeline] Goals count:', goals?.length || 0)
   console.log('🎨 [GoalTimeline] Selected goal index:', selectedGoalIndex)
   console.log('🎨 [GoalTimeline] Current goal:', currentGoal)
-  console.log('🎨 [GoalTimeline] Sorted steps count:', sortedSteps.length)
+  console.log('🎨 [GoalTimeline] Steps sorted by deadline:', sortedSteps.length)
+  console.log('🎨 [GoalTimeline] Step deadline order:', 
+    sortedSteps.map((step, i) => `${i + 1}. ${step.text} (${step.getFormattedEndDate()}) ${step.isCompleted() ? '✅' : '⭕'}`).join(' | ')
+  )
   console.log('🎨 [GoalTimeline] Current step index:', currentStepIndex)
   console.log('🎨 [GoalTimeline] All steps completed:', allStepsCompleted)
 }

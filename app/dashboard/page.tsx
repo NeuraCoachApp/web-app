@@ -160,35 +160,6 @@ export default function Dashboard() {
             </h3>
             <div className="space-y-4">
               <MockDataGenerator />
-              
-              {/* Debug Info */}
-              <div className="bg-background border border-border rounded-lg p-4">
-                <div className="flex justify-between items-center mb-2">
-                  <h4 className="font-medium">Debug Info</h4>
-                  <button
-                    onClick={handleRefreshData}
-                    className="flex items-center gap-1 px-2 py-1 text-xs bg-primary text-primary-foreground 
-                             rounded hover:bg-primary/90 transition-colors"
-                  >
-                    <RefreshCw className="w-3 h-3" />
-                    Refresh
-                  </button>
-                </div>
-                <div className="text-sm text-muted-foreground space-y-1">
-                  <p>Goals Loading: {goalsLoading ? '⏳ Loading...' : '✅ Loaded'}</p>
-                  <p>Sessions Loading: {sessionsLoading ? '⏳ Loading...' : '✅ Loaded'}</p>
-                  <p>Onboarding Check: {onboardingLoading ? '⏳ Loading...' : '✅ Loaded'}</p>
-                  <p>Goals: {goals.length > 0 ? `✅ ${goals.length} Available` : '❌ None'}</p>
-                  <p>User ID: {user?.id || 'None'}</p>
-                  {goals.length > 0 && (
-                    <div>
-                      <p>Current Goal: {goals[0]?.text.substring(0, 30)}...</p>
-                      <p>Total Steps: {goals.reduce((acc, goal) => acc + goal.getTotalStepsCount(), 0)}</p>
-                      <p>Goals: {goals.map((g, i) => `${i + 1}.${g.text.substring(0, 15)}...`).join(' | ')}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
             </div>
           </div>
         )}

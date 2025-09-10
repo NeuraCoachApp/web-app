@@ -87,9 +87,14 @@ export default function MockDataGenerator() {
       const result = generateAdditionalMockGoal(user.id)
       
       if (result.success) {
-        // Invalidate sessions cache to trigger refetch
+        // Invalidate all relevant caches to trigger refetch
         if (user?.id) {
-          await queryClient.invalidateQueries({ queryKey: sessionsKeys.user(user.id) })
+          await Promise.all([
+            queryClient.invalidateQueries({ queryKey: goalsKeys.user(user.id) }),
+            queryClient.invalidateQueries({ queryKey: sessionsKeys.user(user.id) }),
+            queryClient.invalidateQueries({ queryKey: ['onboarding', 'status', user.id] }),
+            queryClient.invalidateQueries({ queryKey: ['goals', 'creation', 'status', user.id] })
+          ])
         }
         
         setMessage(`🎉 Successfully added new goal! You now have multiple goals to switch between.`)
@@ -122,8 +127,13 @@ export default function MockDataGenerator() {
       // Clear client-side mock data
       clearMockSessions(user.id)
       
-      // Invalidate sessions cache to trigger refetch
-      await queryClient.invalidateQueries({ queryKey: sessionsKeys.user(user.id) })
+      // Invalidate all relevant caches to trigger refetch
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: goalsKeys.user(user.id) }),
+        queryClient.invalidateQueries({ queryKey: sessionsKeys.user(user.id) }),
+        queryClient.invalidateQueries({ queryKey: ['onboarding', 'status', user.id] }),
+        queryClient.invalidateQueries({ queryKey: ['goals', 'creation', 'status', user.id] })
+      ])
       
       setMessage('✅ Successfully cleared mock data! Your timeline should update automatically.')
       setHasExistingGoals(false)

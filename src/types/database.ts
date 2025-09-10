@@ -255,6 +255,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      add_steps_to_goal: {
+        Args: { p_goal_uuid: string; p_steps: Json }
+        Returns: Json
+      }
+      create_goal_with_steps: {
+        Args: {
+          p_goal_text: string
+          p_steps: Json
+          p_user_uuid: string
+        }
+        Returns: Json
+      }
       create_profile: {
         Args: { p_user_uuid: string }
         Returns: {
@@ -321,6 +333,10 @@ export type Database = {
           updated_at: string
           user_uuid: string
         }[]
+      }
+      update_step_completion: {
+        Args: { p_is_completed: boolean; p_step_uuid: string }
+        Returns: Json
       }
     }
     Enums: {

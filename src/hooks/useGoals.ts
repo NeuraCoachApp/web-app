@@ -6,7 +6,7 @@ import { goalCreationKeys } from './goalCreation/useGoalCreation'
 import { Tables } from '@/src/types/database'
 import { Goal } from '@/src/classes/Goal'
 import { Session } from '@/src/classes/Session'
-import { fetchUserGoalsWithDetails, fetchUserSessions, createSessionWithInsight } from '@/src/lib/queries'
+import { fetchUserGoalsWithDetails, fetchUserSessions, createSessionWithInsight, createGoalWithSteps, addStepsToGoal, updateStepCompletion } from '@/src/lib/queries'
 import { getMockGoals, getMockSessions } from '@/src/lib/mock-data'
 import { Insight } from '../classes'
 
@@ -265,6 +265,115 @@ export function useCreateGoal() {
     },
     onError: (error) => {
       console.error('Failed to create goal:', error)
+    },
+  })
+}
+
+/**
+ * Hook to create a goal with OpenAI-generated steps
+ */
+export function useCreateGoalWithSteps() {
+  const queryClient = useQueryClient()
+  const { user } = useAuth()
+
+  return useMutation({
+    mutationFn: async ({ 
+      goalText, 
+      steps
+    }: { 
+      goalText: string; 
+      steps: any[]
+    }) => {
+      if (!user) throw new Error('No user found')
+      const goal = await createGoalWithSteps(user.id, goalText, steps)
+      if (!goal) throw new Error('Failed to create goal with steps')
+      return goal
+    },
+    onSuccess: () => {
+      if (user) {
+        // Invalidate user goals to refetch fresh data
+        queryClient.invalidateQueries({ queryKey: goalsKeys.user(user.id) })
+        
+        // Invalidate sessions data
+        queryClient.invalidateQueries({ queryKey: sessionsKeys.user(user.id) })
+        
+        // Also invalidate onboarding status since it depends on goals
+        queryClient.invalidateQueries({ queryKey: onboardingKeys.status(user.id) })
+        
+        // Invalidate goal creation status since user now has goals
+        queryClient.invalidateQueries({ queryKey: goalCreationKeys.status(user.id) })
+      }
+    },
+    onError: (error) => {
+      console.error('Failed to create goal with steps:', error)
+    },
+  })
+}
+
+/**
+ * Hook to add steps to an existing goal
+ */
+export function useAddStepsToGoal() {
+  const queryClient = useQueryClient()
+  const { user } = useAuth()
+
+  return useMutation({
+    mutationFn: async ({ 
+      goalUuid, 
+      steps 
+    }: { 
+      goalUuid: string; 
+      steps: any[] 
+    }) => {
+      const goal = await addStepsToGoal(goalUuid, steps)
+      if (!goal) throw new Error('Failed to add steps to goal')
+      return goal
+    },
+    onSuccess: () => {
+      if (user) {
+        // Invalidate user goals to refetch fresh data
+        queryClient.invalidateQueries({ queryKey: goalsKeys.user(user.id) })
+        
+        // Invalidate sessions data
+        queryClient.invalidateQueries({ queryKey: sessionsKeys.user(user.id) })
+      }
+    },
+    onError: (error) => {
+      console.error('Failed to add steps to goal:', error)
+    },
+  })
+}
+
+/**
+ * Hook to update step completion status
+ */
+export function useUpdateStepCompletion() {
+  const queryClient = useQueryClient()
+  const { user } = useAuth()
+
+  return useMutation({
+    mutationFn: async ({ 
+      stepUuid, 
+      isCompleted 
+    }: { 
+      stepUuid: string; 
+      isCompleted: boolean 
+    }) => {
+      const goal = await updateStepCompletion(stepUuid, isCompleted)
+      if (!goal) throw new Error('Failed to update step completion')
+      return goal
+    },
+    onSuccess: () => {
+      if (user) {
+        // Invalidate user goals to refetch fresh data
+        queryClient.invalidateQueries({ queryKey: goalsKeys.user(user.id) })
+        
+        // Invalidate sessions data
+        queryClient.invalidateQueries({ queryKey: sessionsKeys.user(user.id) })
+      }
+    },
+    onError: (error) => {
+      console.error('Failed to update step completion:', error)
     },
   })
 }

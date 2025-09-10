@@ -2,9 +2,10 @@ import { useQuery } from '@tanstack/react-query'
 import { useState, useCallback } from 'react'
 import { useAuth } from '@/src/contexts/AuthContext'
 import { useProfile } from '../useProfile'
-import { useCreateGoal, useUserGoals } from '../useGoals'
+import { useCreateGoal, useUserGoals, useCreateGoalWithSteps } from '../useGoals'
 import { Tables } from '@/src/types/database'
 import { Goal } from '@/src/classes/Goal'
+import { generateGoalSteps, validateOpenAIConfiguration, GeneratedStep } from '@/src/lib/openai-steps'
 
 export interface GoalCreationStep {
   id: string
@@ -20,6 +21,10 @@ export interface GoalCreationState {
   notificationTime: string
   speechError: string
   goalCreationChecked: boolean
+  generatedSteps: GeneratedStep[]
+  isGeneratingSteps: boolean
+  stepGenerationError: string
+  backgroundProcessStatus: 'idle' | 'generating-steps' | 'creating-goal' | 'completed' | 'failed'
 }
 
 export interface GoalCreationStatus {
@@ -181,6 +186,7 @@ export function useGoalCreationFlow() {
   const { data: profile } = useProfile(user?.id)
   const { data: goalCreationStatus } = useGoalCreationStatus(user?.id)
   const createGoalMutation = useCreateGoal()
+  const createGoalWithStepsMutation = useCreateGoalWithSteps()
 
   // State management
   const [state, setState] = useState<GoalCreationState>({
@@ -189,7 +195,11 @@ export function useGoalCreationFlow() {
     goal: '',
     notificationTime: '09:00',
     speechError: '',
-    goalCreationChecked: false
+    goalCreationChecked: false,
+    generatedSteps: [],
+    isGeneratingSteps: false,
+    stepGenerationError: '',
+    backgroundProcessStatus: 'idle'
   })
 
   // Initialize starting step based on goal creation status
@@ -208,28 +218,105 @@ export function useGoalCreationFlow() {
     }))
   }, [user, goalCreationStatus, state.goalCreationChecked])
 
+  // Generate steps using OpenAI
+  const generateSteps = useCallback(async (goalText: string, reason?: string) => {
+    if (!validateOpenAIConfiguration()) {
+      setState(prev => ({ 
+        ...prev, 
+        stepGenerationError: 'OpenAI API key not configured properly' 
+      }))
+      return
+    }
+
+    setState(prev => ({ 
+      ...prev, 
+      isGeneratingSteps: true, 
+      stepGenerationError: '' 
+    }))
+
+    try {
+      console.log('🤖 [Goal Creation] Generating steps for goal:', goalText)
+      const response = await generateGoalSteps(goalText, reason)
+      
+      setState(prev => ({ 
+        ...prev, 
+        generatedSteps: response.steps,
+        isGeneratingSteps: false
+      }))
+      
+      console.log('✅ [Goal Creation] Successfully generated steps:', response.steps.length)
+      return response.steps
+    } catch (error) {
+      console.error('❌ [Goal Creation] Failed to generate steps:', error)
+      setState(prev => ({ 
+        ...prev, 
+        isGeneratingSteps: false,
+        stepGenerationError: error instanceof Error ? error.message : 'Failed to generate steps'
+      }))
+      return null
+    }
+  }, [])
+
+  // Background goal creation process
+  const createGoalInBackground = useCallback(async (goalText: string, reason: string) => {
+    if (!user) return
+
+    console.log('🎯 [Goal Creation] Starting background goal creation process')
+    setState(prev => ({ ...prev, backgroundProcessStatus: 'generating-steps' }))
+    
+    try {
+      // Generate steps using OpenAI in background
+      const steps = await generateSteps(goalText, reason)
+      
+      setState(prev => ({ ...prev, backgroundProcessStatus: 'creating-goal' }))
+      
+      if (steps && steps.length > 0) {
+        console.log('✅ [Goal Creation] Generated steps, creating goal with steps')
+        // Save the goal with generated steps
+        await createGoalWithStepsMutation.mutateAsync({ 
+          goalText: goalText,
+          steps: steps
+        })
+        console.log('✅ [Goal Creation] Successfully created goal with steps')
+      } else {
+        console.log('⚠️ [Goal Creation] No steps generated, creating goal without steps')
+        // Fallback to creating goal without steps if step generation failed
+        await createGoalMutation.mutateAsync({ goalText: goalText })
+        console.log('✅ [Goal Creation] Successfully created goal without steps')
+      }
+      
+      setState(prev => ({ ...prev, backgroundProcessStatus: 'completed' }))
+    } catch (error) {
+      console.error('❌ [Goal Creation] Background goal creation failed:', error)
+      
+      // Final fallback - try to create goal without steps
+      try {
+        await createGoalMutation.mutateAsync({ goalText: goalText })
+        console.log('✅ [Goal Creation] Fallback goal creation succeeded')
+        setState(prev => ({ ...prev, backgroundProcessStatus: 'completed' }))
+      } catch (fallbackError) {
+        console.error('❌ [Goal Creation] Even fallback goal creation failed:', fallbackError)
+        setState(prev => ({ ...prev, backgroundProcessStatus: 'failed' }))
+      }
+    }
+  }, [user, generateSteps, createGoalWithStepsMutation, createGoalMutation])
+
   // Handle next step logic for goal creation flow
   const handleNext = useCallback(async () => {
     if (state.currentStep === 1 && state.reason.trim()) { // questions_time step
       setState(prev => ({ ...prev, currentStep: 2 }))
     } else if (state.currentStep === 3 && state.goal.trim()) { // goal_setup step
-      // Save the goal and wait for completion
-      if (user && state.goal.trim()) {
-        try {
-          await createGoalMutation.mutateAsync({ goalText: state.goal.trim() })
-          // Wait a bit for cache invalidation to propagate
-          await new Promise(resolve => setTimeout(resolve, 100))
-        } catch (error) {
-          console.warn('Failed to save goal:', error)
-        }
-      }
+      // Start background goal creation process (don't await)
+      createGoalInBackground(state.goal.trim(), state.reason.trim())
+      
+      // Immediately move to next step - don't wait for background process
       setState(prev => ({ ...prev, currentStep: 4 }))
     } else if (state.currentStep === 4) { // notification_time step
       setState(prev => ({ ...prev, currentStep: 5 }))
     } else if (state.currentStep < goalCreationSteps.length - 1) {
       setState(prev => ({ ...prev, currentStep: state.currentStep + 1 }))
     }
-  }, [state, user, createGoalMutation])
+  }, [state, createGoalInBackground])
 
   // Auto-advance for non-input steps (but not the final step)
   const shouldAutoAdvance = useCallback(() => {
@@ -256,6 +343,8 @@ export function useGoalCreationFlow() {
     initializeStep,
     handleNext,
     shouldAutoAdvance,
+    generateSteps,
+    createGoalInBackground,
     getCurrentText: () => getCurrentStepText(
       goalCreationSteps[state.currentStep], 
       profile?.first_name || undefined

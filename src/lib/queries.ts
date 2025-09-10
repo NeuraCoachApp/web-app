@@ -44,81 +44,92 @@ interface InsightRPCData {
 
 /**
  * Fetch all goals for a user with their steps, sessions, and insights using RPC
+ * Also includes client-side mock goals for development/testing
  */
 export async function fetchUserGoalsWithDetails(userId: string): Promise<Goal[]> {
   try {
+    // First, fetch database goals via RPC
     const { data, error } = await supabase.rpc('get_user_goals_with_details', {
       p_user_uuid: userId
     })
 
     console.log('🔍 [fetchUserGoalsWithDetails] RPC result:', { data, error })
 
+    let databaseGoals: Goal[] = []
+
     if (error) {
       console.error('Error fetching user goals with RPC:', error)
-      return []
-    }
+    } else if (data && Array.isArray(data)) {
+      for (const goalData of data as any as GoalRPCData[]) {
+        const goal = new Goal({
+          uuid: goalData.uuid,
+          text: goalData.text,
+          created_at: goalData.created_at,
+          end_at: goalData.end_at
+        })
 
-    if (!data || !Array.isArray(data)) {
-      return []
-    }
+        // Process steps
+        if (goalData.steps && Array.isArray(goalData.steps)) {
+          for (const stepData of goalData.steps) {
+            const step = new Step({
+              uuid: stepData.uuid,
+              text: stepData.text,
+              isCompleted: stepData.isCompleted,
+              created_at: stepData.created_at,
+              end_at: stepData.end_at,
+              next_step: stepData.next_step
+            })
 
-    const goals: Goal[] = []
+            // Process sessions for this step
+            if (stepData.sessions && Array.isArray(stepData.sessions)) {
+              for (const sessionData of stepData.sessions) {
+                const insight = new Insight({
+                  uuid: sessionData.insight.uuid,
+                  summary: sessionData.insight.summary,
+                  progress: sessionData.insight.progress,
+                  effort_level: sessionData.insight.effort_level,
+                  stress_level: sessionData.insight.stress_level,
+                  step_uuid: sessionData.insight.step_uuid,
+                  created_at: sessionData.insight.created_at
+                })
+                insight.setStep(step)
 
-    for (const goalData of data as any as GoalRPCData[]) {
-      const goal = new Goal({
-        uuid: goalData.uuid,
-        text: goalData.text,
-        created_at: goalData.created_at,
-        end_at: goalData.end_at
-      })
-
-      // Process steps
-      if (goalData.steps && Array.isArray(goalData.steps)) {
-        for (const stepData of goalData.steps) {
-          const step = new Step({
-            uuid: stepData.uuid,
-            text: stepData.text,
-            isCompleted: stepData.isCompleted,
-            created_at: stepData.created_at,
-            end_at: stepData.end_at,
-            next_step: stepData.next_step
-          })
-
-          // Process sessions for this step
-          if (stepData.sessions && Array.isArray(stepData.sessions)) {
-            for (const sessionData of stepData.sessions) {
-              const insight = new Insight({
-                uuid: sessionData.insight.uuid,
-                summary: sessionData.insight.summary,
-                progress: sessionData.insight.progress,
-                effort_level: sessionData.insight.effort_level,
-                stress_level: sessionData.insight.stress_level,
-                step_uuid: sessionData.insight.step_uuid,
-                created_at: sessionData.insight.created_at
-              })
-              insight.setStep(step)
-
-              const session = new Session({
-                uuid: sessionData.uuid,
-                created_at: sessionData.created_at,
-                goal_uuid: sessionData.goal_uuid,
-                insight_uuid: sessionData.insight_uuid,
-                user_uuid: sessionData.user_uuid
-              })
-              session.setGoal(goal)
-              session.setInsight(insight)
-              step.addSession(session)
+                const session = new Session({
+                  uuid: sessionData.uuid,
+                  created_at: sessionData.created_at,
+                  goal_uuid: sessionData.goal_uuid,
+                  insight_uuid: sessionData.insight_uuid,
+                  user_uuid: sessionData.user_uuid
+                })
+                session.setGoal(goal)
+                session.setInsight(insight)
+                step.addSession(session)
+              }
             }
+
+            goal.addStep(step)
           }
-
-          goal.addStep(step)
         }
-      }
 
-      goals.push(goal)
+        databaseGoals.push(goal)
+      }
     }
 
-    return goals
+    // Then, get client-side mock goals
+    const { getMockGoals } = await import('@/src/lib/mock-data')
+    const mockGoals = getMockGoals(userId)
+
+    // Combine database goals and mock goals
+    const allGoals = [...databaseGoals, ...mockGoals]
+
+    console.log('🎯 [fetchUserGoalsWithDetails] Combined goals:', { 
+      userId, 
+      databaseGoalsCount: databaseGoals.length, 
+      mockGoalsCount: mockGoals.length, 
+      totalGoalsCount: allGoals.length 
+    })
+
+    return allGoals
   } catch (error) {
     console.error('Error fetching user goals with details:', error)
     return []
@@ -383,5 +394,250 @@ export async function fetchGoalDailyMetrics(
   } catch (error) {
     console.error('Error fetching goal daily metrics:', error)
     return []
+  }
+}
+
+/**
+ * Create a goal with generated steps using RPC
+ */
+export async function createGoalWithSteps(
+  userId: string,
+  goalText: string,
+  steps: any[]
+): Promise<Goal | null> {
+  try {
+    const { data, error } = await supabase.rpc('create_goal_with_steps' as any, {
+      p_user_uuid: userId,
+      p_goal_text: goalText,
+      p_steps: steps
+    })
+
+    if (error) {
+      console.error('Error creating goal with steps via RPC:', error)
+      return null
+    }
+
+    if (!data) {
+      return null
+    }
+
+    // Parse the returned goal data (same structure as get_goal_with_details)
+    const goalData = data as any as GoalRPCData
+    const goal = new Goal({
+      uuid: goalData.uuid,
+      text: goalData.text,
+      created_at: goalData.created_at,
+      end_at: goalData.end_at
+    })
+
+    // Process steps
+    if (goalData.steps && Array.isArray(goalData.steps)) {
+      for (const stepData of goalData.steps) {
+        const step = new Step({
+          uuid: stepData.uuid,
+          text: stepData.text,
+          isCompleted: stepData.isCompleted,
+          created_at: stepData.created_at,
+          end_at: stepData.end_at,
+          next_step: stepData.next_step
+        })
+
+        // Process sessions for this step (if any)
+        if (stepData.sessions && Array.isArray(stepData.sessions)) {
+          for (const sessionData of stepData.sessions) {
+            const insight = new Insight({
+              uuid: sessionData.insight.uuid,
+              summary: sessionData.insight.summary,
+              progress: sessionData.insight.progress,
+              effort_level: sessionData.insight.effort_level,
+              stress_level: sessionData.insight.stress_level,
+              step_uuid: sessionData.insight.step_uuid,
+              created_at: sessionData.insight.created_at
+            })
+            insight.setStep(step)
+
+            const session = new Session({
+              uuid: sessionData.uuid,
+              created_at: sessionData.created_at,
+              goal_uuid: sessionData.goal_uuid,
+              insight_uuid: sessionData.insight_uuid,
+              user_uuid: sessionData.user_uuid
+            })
+            session.setGoal(goal)
+            session.setInsight(insight)
+            step.addSession(session)
+          }
+        }
+
+        goal.addStep(step)
+      }
+    }
+
+    return goal
+  } catch (error) {
+    console.error('Error creating goal with steps:', error)
+    return null
+  }
+}
+
+/**
+ * Add steps to an existing goal using RPC
+ */
+export async function addStepsToGoal(
+  goalUuid: string,
+  steps: any[]
+): Promise<Goal | null> {
+  try {
+    const { data, error } = await supabase.rpc('add_steps_to_goal' as any, {
+      p_goal_uuid: goalUuid,
+      p_steps: steps
+    })
+
+    if (error) {
+      console.error('Error adding steps to goal via RPC:', error)
+      return null
+    }
+
+    if (!data) {
+      return null
+    }
+
+    // Parse the returned goal data (same structure as get_goal_with_details)
+    const goalData = data as any as GoalRPCData
+    const goal = new Goal({
+      uuid: goalData.uuid,
+      text: goalData.text,
+      created_at: goalData.created_at,
+      end_at: goalData.end_at
+    })
+
+    // Process steps
+    if (goalData.steps && Array.isArray(goalData.steps)) {
+      for (const stepData of goalData.steps) {
+        const step = new Step({
+          uuid: stepData.uuid,
+          text: stepData.text,
+          isCompleted: stepData.isCompleted,
+          created_at: stepData.created_at,
+          end_at: stepData.end_at,
+          next_step: stepData.next_step
+        })
+
+        // Process sessions for this step (if any)
+        if (stepData.sessions && Array.isArray(stepData.sessions)) {
+          for (const sessionData of stepData.sessions) {
+            const insight = new Insight({
+              uuid: sessionData.insight.uuid,
+              summary: sessionData.insight.summary,
+              progress: sessionData.insight.progress,
+              effort_level: sessionData.insight.effort_level,
+              stress_level: sessionData.insight.stress_level,
+              step_uuid: sessionData.insight.step_uuid,
+              created_at: sessionData.insight.created_at
+            })
+            insight.setStep(step)
+
+            const session = new Session({
+              uuid: sessionData.uuid,
+              created_at: sessionData.created_at,
+              goal_uuid: sessionData.goal_uuid,
+              insight_uuid: sessionData.insight_uuid,
+              user_uuid: sessionData.user_uuid
+            })
+            session.setGoal(goal)
+            session.setInsight(insight)
+            step.addSession(session)
+          }
+        }
+
+        goal.addStep(step)
+      }
+    }
+
+    return goal
+  } catch (error) {
+    console.error('Error adding steps to goal:', error)
+    return null
+  }
+}
+
+/**
+ * Update a step's completion status using RPC
+ */
+export async function updateStepCompletion(
+  stepUuid: string,
+  isCompleted: boolean
+): Promise<Goal | null> {
+  try {
+    const { data, error } = await supabase.rpc('update_step_completion' as any, {
+      p_step_uuid: stepUuid,
+      p_is_completed: isCompleted
+    })
+
+    if (error) {
+      console.error('Error updating step completion via RPC:', error)
+      return null
+    }
+
+    if (!data) {
+      return null
+    }
+
+    // Parse the returned goal data (same structure as get_goal_with_details)
+    const goalData = data as any as GoalRPCData
+    const goal = new Goal({
+      uuid: goalData.uuid,
+      text: goalData.text,
+      created_at: goalData.created_at,
+      end_at: goalData.end_at
+    })
+
+    // Process steps
+    if (goalData.steps && Array.isArray(goalData.steps)) {
+      for (const stepData of goalData.steps) {
+        const step = new Step({
+          uuid: stepData.uuid,
+          text: stepData.text,
+          isCompleted: stepData.isCompleted,
+          created_at: stepData.created_at,
+          end_at: stepData.end_at,
+          next_step: stepData.next_step
+        })
+
+        // Process sessions for this step (if any)
+        if (stepData.sessions && Array.isArray(stepData.sessions)) {
+          for (const sessionData of stepData.sessions) {
+            const insight = new Insight({
+              uuid: sessionData.insight.uuid,
+              summary: sessionData.insight.summary,
+              progress: sessionData.insight.progress,
+              effort_level: sessionData.insight.effort_level,
+              stress_level: sessionData.insight.stress_level,
+              step_uuid: sessionData.insight.step_uuid,
+              created_at: sessionData.insight.created_at
+            })
+            insight.setStep(step)
+
+            const session = new Session({
+              uuid: sessionData.uuid,
+              created_at: sessionData.created_at,
+              goal_uuid: sessionData.goal_uuid,
+              insight_uuid: sessionData.insight_uuid,
+              user_uuid: sessionData.user_uuid
+            })
+            session.setGoal(goal)
+            session.setInsight(insight)
+            step.addSession(session)
+          }
+        }
+
+        goal.addStep(step)
+      }
+    }
+
+    return goal
+  } catch (error) {
+    console.error('Error updating step completion:', error)
+    return null
   }
 }
