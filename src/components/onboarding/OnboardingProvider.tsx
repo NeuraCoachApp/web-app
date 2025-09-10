@@ -87,25 +87,15 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
         })
       }
       
-      // Wait for speech to complete, then advance after a short delay
-      // BUT don't auto-advance on the last step - let user click the button
       if (!isSpeaking && !isPreparingSpeech && !onboardingFlow.isLastStep) {
         const timer = setTimeout(async () => {
-          if (process.env.NODE_ENV === 'development') {
-            console.log('⏱️ [Auto-advance] Speech completed, advancing step', {
-              currentStep: onboardingFlow.state.currentStep,
-              stepId: onboardingFlow.currentStepData?.id,
-              isLastStep: onboardingFlow.isLastStep
-            })
+          // Double-check that we should still auto-advance and speech is still complete
+          if (onboardingFlow.shouldAutoAdvance() && !isSpeaking && !isPreparingSpeech) {     
+            onboardingFlow.setCurrentStep(onboardingFlow.state.currentStep + 1)
           }
-          
-          onboardingFlow.setCurrentStep(onboardingFlow.state.currentStep + 1)
-        }, 1000) // Short 1 second delay after speech completes
+        }, 100) // Increased delay to ensure speech completion and user comprehension
         
         return () => {
-          if (process.env.NODE_ENV === 'development') {
-            console.log('⏱️ [Auto-advance] Clearing completion timer for step', onboardingFlow.state.currentStep)
-          }
           clearTimeout(timer)
         }
       }

@@ -76,8 +76,74 @@ class ElevenLabsService {
   }
 }
 
+// Audio cache for pre-fetched audio
+interface AudioCacheEntry {
+  audio: HTMLAudioElement
+  timestamp: number
+}
+
+class AudioCache {
+  private cache = new Map<string, AudioCacheEntry>()
+  private readonly maxAge = 5 * 60 * 1000 // 5 minutes
+
+  set(key: string, audio: HTMLAudioElement) {
+    // Clean up old entries
+    this.cleanup()
+    
+    this.cache.set(key, {
+      audio,
+      timestamp: Date.now()
+    })
+  }
+
+  get(key: string): HTMLAudioElement | null {
+    const entry = this.cache.get(key)
+    if (!entry) return null
+
+    // Check if entry is still valid
+    if (Date.now() - entry.timestamp > this.maxAge) {
+      this.cache.delete(key)
+      // Clean up blob URL
+      if (entry.audio.src) {
+        URL.revokeObjectURL(entry.audio.src)
+      }
+      return null
+    }
+
+    return entry.audio
+  }
+
+  private cleanup() {
+    const now = Date.now()
+    const keysToDelete: string[] = []
+    
+    this.cache.forEach((entry, key) => {
+      if (now - entry.timestamp > this.maxAge) {
+        keysToDelete.push(key)
+        // Clean up blob URL
+        if (entry.audio.src) {
+          URL.revokeObjectURL(entry.audio.src)
+        }
+      }
+    })
+    
+    keysToDelete.forEach(key => this.cache.delete(key))
+  }
+
+  clear() {
+    // Clean up all blob URLs before clearing
+    this.cache.forEach(entry => {
+      if (entry.audio.src) {
+        URL.revokeObjectURL(entry.audio.src)
+      }
+    })
+    this.cache.clear()
+  }
+}
+
 // Create a singleton instance
 let elevenLabsInstance: ElevenLabsService | null = null
+const audioCache = new AudioCache()
 
 export function getElevenLabsService(): ElevenLabsService {
   if (!elevenLabsInstance) {
@@ -135,8 +201,19 @@ function splitTextIntoWords(text: string): string[] {
 
 // Hook for using voice synthesis in React components
 export function useVoiceSynthesis() {
-  const synthesizeText = async (text: string): Promise<HTMLAudioElement> => {
+  const synthesizeText = async (text: string, useCache: boolean = true): Promise<HTMLAudioElement> => {
     try {
+      // Check cache first if enabled
+      if (useCache) {
+        const cached = audioCache.get(text)
+        if (cached) {
+          // Clone the cached audio element to avoid conflicts
+          const clonedAudio = cached.cloneNode(true) as HTMLAudioElement
+          clonedAudio.playbackRate = 0.85
+          return clonedAudio
+        }
+      }
+
       const service = getElevenLabsService()
       const audioBuffer = await service.synthesize({ text })
       
@@ -148,10 +225,31 @@ export function useVoiceSynthesis() {
       // Slow down the playback rate for more measured speech
       audio.playbackRate = 0.85 // 15% slower than normal speed
       
+      // Cache the audio if caching is enabled
+      if (useCache) {
+        audioCache.set(text, audio)
+      }
+      
       return audio
     } catch (error) {
       console.error('Voice synthesis error:', error)
       throw error
+    }
+  }
+
+  // Pre-fetch audio for future use
+  const prefetchAudio = async (text: string): Promise<void> => {
+    try {
+      // Don't prefetch if already cached
+      if (audioCache.get(text)) {
+        return
+      }
+
+      // Synthesize and cache in background
+      await synthesizeText(text, true)
+    } catch (error) {
+      // Silently fail for prefetch operations
+      console.warn('Pre-fetch failed for text:', text, error)
     }
   }
 
@@ -273,6 +371,7 @@ export function useVoiceSynthesis() {
   return {
     synthesizeText,
     playText,
-    playTextWithProgress
+    playTextWithProgress,
+    prefetchAudio
   }
 }

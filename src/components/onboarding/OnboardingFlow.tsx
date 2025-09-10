@@ -19,6 +19,29 @@ export function OnboardingFlow() {
   } = useOnboardingContext()
   const { markUserInteracted } = useCoach()
 
+  // Function to get next step's text for prefetching
+  const getNextStepText = (): string | null => {
+    const nextStepIndex = state.currentStep + 1
+    if (nextStepIndex >= onboardingSteps.length) {
+      return null
+    }
+
+    const nextStep = onboardingSteps[nextStepIndex]
+    let nextText = nextStep.text
+
+    // Handle personalization for the next step
+    if (nextStep.id === 'personal_welcome') {
+      nextText = nextText.replace('[Name]', state.firstName || state.userName || 'there')
+    }
+
+    // Add subtext if present
+    if (nextStep.subtext) {
+      nextText = `${nextText} ${nextStep.subtext}`
+    }
+
+    return nextText
+  }
+
   const renderCurrentStep = () => {
     const stepId = currentStepData?.id
 
@@ -67,6 +90,7 @@ export function OnboardingFlow() {
       getCurrentText={getCurrentText}
       currentStepData={currentStepData}
       stepKey={`${state.currentStep}`}
+      getNextStepText={getNextStepText}
     >
       {renderCurrentStep()}
     </FlowLayout>

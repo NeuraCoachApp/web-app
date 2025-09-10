@@ -26,6 +26,7 @@ interface CoachContextType extends CoachState {
   requestMicPermission: () => Promise<boolean>
   markUserInteracted: () => void
   stopCurrentSpeech: () => void
+  prefetchAudio: (text: string) => Promise<void>
 }
 
 const CoachContext = createContext<CoachContextType | undefined>(undefined)
@@ -42,7 +43,7 @@ export function CoachProvider({ children }: { children: React.ReactNode }) {
     hasUserInteracted: false
   })
 
-  const { playText, playTextWithProgress } = useVoiceSynthesis()
+  const { playText, playTextWithProgress, prefetchAudio } = useVoiceSynthesis()
   const { isSupported: speechSupported, listenForName, startListeningWithCallback, stopListening: stopSpeechRecognition, requestPermission } = useSpeechRecognition()
   const currentSpeechRef = useRef<HTMLAudioElement | null>(null)
 
@@ -245,7 +246,8 @@ export function CoachProvider({ children }: { children: React.ReactNode }) {
     clearSpokenHistory,
     requestMicPermission,
     markUserInteracted,
-    stopCurrentSpeech
+    stopCurrentSpeech,
+    prefetchAudio
   }
 
   return <CoachContext.Provider value={value}>{children}</CoachContext.Provider>

@@ -20,6 +20,7 @@ interface FlowLayoutProps {
   showProgressIndicator?: boolean
   blobSize?: number
   className?: string
+  getNextStepText?: () => string | null // Function to get next step's text for prefetching
 }
 
 export function FlowLayout({
@@ -32,9 +33,10 @@ export function FlowLayout({
   showCaptions = true,
   showProgressIndicator = true,
   blobSize = 200,
-  className = ""
+  className = "",
+  getNextStepText
 }: FlowLayoutProps) {
-  const { hasVoiceEnabled, speak } = useCoach()
+  const { hasVoiceEnabled, speak, prefetchAudio } = useCoach()
   const lastSpokenContentRef = useRef<string>('')
   const speechTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -57,12 +59,22 @@ export function FlowLayout({
           
           // The CoachContext will handle preventing duplicates
           await speak(fullText)
+          
+          // Pre-fetch next step's audio in the background
+          if (getNextStepText) {
+            const nextText = getNextStepText()
+            if (nextText) {
+              prefetchAudio(nextText).catch(() => {
+                // Silently handle prefetch failures
+              })
+            }
+          }
         }
       }
     }
 
-    // Small delay to prevent rapid-fire speech attempts
-    speechTimeoutRef.current = setTimeout(speakCurrentStep, 100)
+    // Start speech with a small delay to ensure proper state initialization
+    speechTimeoutRef.current = setTimeout(speakCurrentStep, 50)
 
     return () => {
       if (speechTimeoutRef.current) {
