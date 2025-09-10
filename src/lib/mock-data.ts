@@ -130,7 +130,11 @@ function getDateNDaysAgo(daysAgo: number): Date {
 
 /**
  * Generate client-side mock goal with steps and sessions (no database insertion)
- * Creates a 7-day schedule where each day has assigned steps
+ * Creates sequential step progression where:
+ * - Only first N steps are completed (40-70% completion rate)
+ * - Steps are ordered chronologically by deadline from goal start date
+ * - Each step gets a deadline progressively later from goal start (step 1, 2, 3... in order)
+ * - This creates a natural timeline showing goal progression from start to finish
  */
 export function generateMockGoalData(userId: string): { success: boolean; data?: Goal; error?: any } {
   try {
@@ -159,96 +163,73 @@ export function generateMockGoalData(userId: string): { success: boolean; data?:
       stepUuids.push(stepUuid)
     }
 
-    // Create a 7-day schedule with sequential step progression
-    const dailySchedule: { [day: number]: number[] } = {}
+    // Create sequential step progression with proper deadline ordering
     const totalSteps = Math.min(goalTemplate.steps.length, 10) // Use up to 10 steps
+    
+    // Determine how many steps should be completed (realistic progression over 7 days)
+    // Complete 40-70% of steps to show realistic progress
+    const completionRate = randomBetween(40, 70) / 100
+    const stepsToComplete = Math.floor(totalSteps * completionRate)
+    
+    console.log(`📊 Planning to complete ${stepsToComplete} out of ${totalSteps} steps (${Math.round(completionRate * 100)}% completion rate)`)
+    
+    // Track step completion - only sequential completion allowed
+    let stepsCompleted: boolean[] = new Array(totalSteps).fill(false)
+    
+    // Mark first N steps as completed in sequence
+    for (let i = 0; i < stepsToComplete; i++) {
+      stepsCompleted[i] = true
+    }
+    
+    // Create a schedule where completed steps get sessions in earlier days
+    // and incomplete steps get sessions in later days
+    const dailySchedule: { [day: number]: number[] } = {}
     
     // Initialize all days with empty arrays
     for (let day = 0; day < 7; day++) {
       dailySchedule[day] = []
     }
     
-    // Track step progression and completion
-    let currentStepIndex = 0
-    let stepsCompleted: boolean[] = new Array(totalSteps).fill(false)
+    // Distribute completed steps across first 5 days (days 0-4)
+    const completedDays = 5
+    let completedStepsAssigned = 0
     
-    // Assign steps day by day, ensuring sequential progression
-    for (let day = 0; day < 7; day++) {
-      // Each day should have 1-3 steps assigned
-      const stepsForDay = randomBetween(1, 3)
-      let stepsAssignedToday = 0
+    for (let day = 0; day < completedDays && completedStepsAssigned < stepsToComplete; day++) {
+      // Assign 1-2 completed steps per day
+      const stepsForDay = Math.min(randomBetween(1, 2), stepsToComplete - completedStepsAssigned)
       
-      // First, assign the current step (if available)
-      if (currentStepIndex < totalSteps) {
-        dailySchedule[day].push(currentStepIndex)
-        stepsAssignedToday++
-        
-        // Determine if this step will be completed today (70% chance)
-        const willCompleteToday = Math.random() < 0.7
-        if (willCompleteToday) {
-          stepsCompleted[currentStepIndex] = true
-          currentStepIndex++ // Move to next step
-        }
+      for (let i = 0; i < stepsForDay && completedStepsAssigned < stepsToComplete; i++) {
+        dailySchedule[day].push(completedStepsAssigned)
+        completedStepsAssigned++
       }
+    }
+    
+    // Assign remaining incomplete steps to later days (days 5-6)
+    // Focus on the next 1-2 steps that user is currently working on
+    const incompleteDays = [5, 6]
+    const currentWorkingStepIndex = stepsToComplete // First incomplete step
+    
+    if (currentWorkingStepIndex < totalSteps) {
+      // Assign current working step to day 5
+      dailySchedule[5].push(currentWorkingStepIndex)
       
-      // Add additional steps for this day if needed and available
-      while (stepsAssignedToday < stepsForDay && currentStepIndex < totalSteps) {
-        // Can only assign next step if all previous steps are completed
-        const canAssignNextStep = stepsCompleted[currentStepIndex - 1] !== false || currentStepIndex === 0
-        
-        if (canAssignNextStep) {
-          dailySchedule[day].push(currentStepIndex)
-          stepsAssignedToday++
-          
-          // 50% chance to complete additional steps on the same day
-          const willCompleteToday = Math.random() < 0.5
-          if (willCompleteToday) {
-            stepsCompleted[currentStepIndex] = true
-            currentStepIndex++
-          } else {
-            // Don't assign more steps if we can't complete this one
-            break
-          }
-        } else {
-          break
-        }
-      }
-      
-      // If no new steps were assigned and we still have incomplete steps, 
-      // assign an existing incomplete step for retry
-      if (stepsAssignedToday === 0 && currentStepIndex > 0) {
-        // Find the most recent incomplete step
-        for (let i = currentStepIndex - 1; i >= 0; i--) {
-          if (!stepsCompleted[i]) {
-            dailySchedule[day].push(i)
-            // 80% chance to complete it on retry
-            if (Math.random() < 0.8) {
-              stepsCompleted[i] = true
-              if (i === currentStepIndex - 1) {
-                currentStepIndex = Math.min(currentStepIndex + 1, totalSteps)
-              }
-            }
-            break
-          }
-        }
+      // Maybe assign next step to day 6 if it exists
+      if (currentWorkingStepIndex + 1 < totalSteps && Math.random() < 0.6) {
+        dailySchedule[6].push(currentWorkingStepIndex + 1)
       }
     }
     
     // Ensure every day has at least one step
     for (let day = 0; day < 7; day++) {
       if (dailySchedule[day].length === 0) {
-        // Assign the current available step or a previous incomplete step
-        if (currentStepIndex < totalSteps) {
-          dailySchedule[day].push(currentStepIndex)
+        if (day < 5 && stepsToComplete > 0) {
+          // Early days should have completed steps
+          const randomCompletedStep = Math.floor(Math.random() * stepsToComplete)
+          dailySchedule[day].push(randomCompletedStep)
         } else {
-          // Find any incomplete step to retry
-          const incompleteStep = stepsCompleted.findIndex(completed => !completed)
-          if (incompleteStep !== -1) {
-            dailySchedule[day].push(incompleteStep)
-          } else {
-            // All steps complete, assign the last step for maintenance
-            dailySchedule[day].push(Math.max(0, currentStepIndex - 1))
-          }
+          // Later days should have current working step
+          const workingStep = Math.min(stepsToComplete, totalSteps - 1)
+          dailySchedule[day].push(workingStep)
         }
       }
     }
@@ -256,7 +237,8 @@ export function generateMockGoalData(userId: string): { success: boolean; data?:
     console.log('📅 Sequential daily schedule:', dailySchedule)
     console.log('📊 Steps completion status:', stepsCompleted)
 
-    // Create steps with proper scheduling and sessions
+    // Create steps with proper deadline ordering
+    // Steps should have deadlines that result in incomplete steps appearing first when sorted
     for (let i = 0; i < totalSteps; i++) {
       const stepText = goalTemplate.steps[i]
       
@@ -265,19 +247,25 @@ export function generateMockGoalData(userId: string): { success: boolean; data?:
         dailySchedule[parseInt(day)].includes(i)
       ).map(day => parseInt(day))
       
-      // Use the first assigned day for step creation date
-      const primaryDayIndex = assignedDays[0] || 0
-      const stepDate = getDateNDaysAgo(6 - primaryDayIndex)
-      
-      // Step is created at the beginning of its first assigned day
-      const stepCreatedAt = new Date(stepDate)
+      // Step creation date: all steps were created when goal started (7 days ago)
+      const stepCreatedAt = new Date(goalStartDate)
       stepCreatedAt.setHours(6, 0, 0, 0) // 6 AM
       
-      // Step ends at the end of its last assigned day (or same day if only one)
-      const lastDayIndex = assignedDays[assignedDays.length - 1] || primaryDayIndex
-      const stepEndDate = getDateNDaysAgo(6 - lastDayIndex)
-      const stepEndAt = new Date(stepEndDate)
-      stepEndAt.setHours(23, 59, 59, 999) // 11:59 PM
+      // Step end date logic: chronological ordering from goal start date
+      // Each step gets a deadline that's progressively later from the goal start
+      // This creates a natural timeline progression regardless of completion status
+      let stepEndAt: Date
+      
+      // Calculate step deadline as goal start + (step index * days per step)
+      // Spread steps across the goal duration (7 days) plus some buffer
+      const goalDurationDays = 7
+      const totalDurationDays = goalDurationDays + 3 // Add 3 days buffer for incomplete steps
+      const daysPerStep = totalDurationDays / totalSteps
+      const stepDeadlineDays = Math.ceil((i + 1) * daysPerStep)
+      
+      stepEndAt = new Date(goalStartDate)
+      stepEndAt.setDate(stepEndAt.getDate() + stepDeadlineDays)
+      stepEndAt.setHours(23, 59, 59, 999)
       
       // Create Step class instance
       const step = new Step({
@@ -293,28 +281,30 @@ export function generateMockGoalData(userId: string): { success: boolean; data?:
       const isStepCompleted = stepsCompleted[i]
       let allSessions: { dayIndex: number; sessionDate: Date; sessionTime: Date }[] = []
       
-      // First, collect all session times across all days
-      for (const dayIndex of assignedDays) {
-        const sessionDate = getDateNDaysAgo(6 - dayIndex)
-        
-        // Generate 1-2 sessions for this step on this day
-        const sessionsThisDay = randomBetween(1, 2)
-        
-        for (let j = 0; j < sessionsThisDay; j++) {
-          // Create session at random time during the day
-          const sessionTime = new Date(sessionDate)
-          sessionTime.setHours(
-            randomBetween(8, 20), // Between 8 AM and 8 PM
-            randomBetween(0, 59),
-            randomBetween(0, 59)
-          )
+      // Only create sessions for days that have this step assigned
+      if (assignedDays.length > 0) {
+        for (const dayIndex of assignedDays) {
+          const sessionDate = getDateNDaysAgo(6 - dayIndex)
           
-          allSessions.push({ dayIndex, sessionDate, sessionTime })
+          // Generate 1-2 sessions for this step on this day
+          const sessionsThisDay = randomBetween(1, 2)
+          
+          for (let j = 0; j < sessionsThisDay; j++) {
+            // Create session at random time during the day
+            const sessionTime = new Date(sessionDate)
+            sessionTime.setHours(
+              randomBetween(8, 20), // Between 8 AM and 8 PM
+              randomBetween(0, 59),
+              randomBetween(0, 59)
+            )
+            
+            allSessions.push({ dayIndex, sessionDate, sessionTime })
+          }
         }
+        
+        // Sort sessions chronologically to identify the last one
+        allSessions.sort((a, b) => a.sessionTime.getTime() - b.sessionTime.getTime())
       }
-      
-      // Sort sessions chronologically to identify the last one
-      allSessions.sort((a, b) => a.sessionTime.getTime() - b.sessionTime.getTime())
       
       // Create sessions with proper progress values
       allSessions.forEach((sessionInfo, sessionIndex) => {
@@ -362,13 +352,15 @@ export function generateMockGoalData(userId: string): { success: boolean; data?:
       })
       
       // Log sessions per day
-      const sessionsByDay = assignedDays.map(dayIndex => {
-        const sessionsThisDay = allSessions.filter(s => s.dayIndex === dayIndex).length
-        console.log(`📝 Created ${sessionsThisDay} sessions for step "${stepText.substring(0, 30)}..." on day ${dayIndex + 1}`)
-        return sessionsThisDay
-      })
+      if (assignedDays.length > 0) {
+        const sessionsByDay = assignedDays.map(dayIndex => {
+          const sessionsThisDay = allSessions.filter(s => s.dayIndex === dayIndex).length
+          console.log(`📝 Created ${sessionsThisDay} sessions for step "${stepText.substring(0, 30)}..." on day ${dayIndex + 1}`)
+          return sessionsThisDay
+        })
+      }
       
-      console.log(`✅ Created step "${stepText.substring(0, 30)}..." with ${step.getSessions().length} total sessions (completed: ${isStepCompleted})`)
+      console.log(`✅ Created step "${stepText.substring(0, 30)}..." with ${step.getSessions().length} total sessions (completed: ${isStepCompleted}) [deadline: ${stepEndAt.toDateString()}]`)
       goal.addStep(step)
     }
 
@@ -389,8 +381,19 @@ export function generateMockGoalData(userId: string): { success: boolean; data?:
       console.log(`  Day ${day + 1} (${date.toDateString()}): ${stepIndices.length} steps assigned [${stepNames}], ${totalSessions} sessions`)
     }
 
-    console.log('🎉 Successfully generated 7-day scheduled mock goal data!')
+    // Log the final step ordering as it will appear in the timeline
+    const finalSteps = goal.getSteps()
+    console.log('🎯 Final Step Order (chronological by deadline from goal start):')
+    finalSteps.forEach((step, index) => {
+      const status = step.isCompleted() ? '✅ Completed' : '⭕ Incomplete'
+      const deadline = step.getFormattedEndDate()
+      const originalIndex = stepUuids.findIndex(uuid => uuid === step.uuid)
+      console.log(`  ${index + 1}. [Step ${originalIndex + 1}] ${step.text.substring(0, 35)}... [${status}] [Deadline: ${deadline}]`)
+    })
+
+    console.log('🎉 Successfully generated sequential mock goal data!')
     console.log(`📊 Created: 1 goal with ${goal.getTotalStepsCount()} steps and ${goal.getTotalSessionsCount()} total sessions`)
+    console.log(`📈 Progress: ${stepsToComplete}/${totalSteps} steps completed (${Math.round((stepsToComplete/totalSteps) * 100)}%)`)
     
     return { success: true, data: goal }
   } catch (error) {

@@ -71,13 +71,6 @@ export default function GoalTimeline({
           {currentGoal && (
             <>
               <GoalSquare goal={currentGoal} allStepsCompleted={allStepsCompleted} />
-              
-              {/* Timeline line starting from goal */}
-              {sortedSteps.length > 0 && (
-                <div className={`absolute left-full top-1/2 transform -translate-y-1/2 w-20 h-0.5 ${
-                  allStepsCompleted ? 'bg-green-500' : 'bg-primary'
-                }`} />
-              )}
             </>
           )}
 

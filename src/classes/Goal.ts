@@ -23,25 +23,15 @@ export class Goal {
   }
 
   /**
-   * Get all steps for this goal, sorted by deadline priority
-   * Incomplete steps with closest deadlines appear first, then completed steps
+   * Get all steps for this goal, sorted chronologically by deadline
+   * Steps appear in timeline order from earliest deadline to latest deadline
    */
   getSteps(): Step[] {
     return [...this.steps].sort((a, b) => {
-      const aCompleted = a.isCompleted()
-      const bCompleted = b.isCompleted()
-      
-      // If completion status differs, prioritize incomplete steps
-      if (aCompleted !== bCompleted) {
-        return aCompleted ? 1 : -1 // Incomplete steps (false) come first
-      }
-      
-      // For steps with same completion status, sort by deadline
+      // Sort purely by deadline (earliest first) for chronological timeline ordering
       const aEndDate = new Date(a.end_at).getTime()
       const bEndDate = new Date(b.end_at).getTime()
       
-      // If both are incomplete, closest deadline first
-      // If both are completed, earliest deadline first (chronological order)
       return aEndDate - bEndDate
     })
   }
