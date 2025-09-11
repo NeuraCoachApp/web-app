@@ -18,20 +18,20 @@ export default function TimelineLayout({ children }: TimelineLayoutProps) {
 }
 
 export function TimelineCompletionIndicator({ 
-  allStepsCompleted, 
+  allMilestonesCompleted, 
   currentGoal 
 }: { 
-  allStepsCompleted: boolean
+  allMilestonesCompleted: boolean
   currentGoal: any
 }) {
   return (
     <div className="relative flex flex-col items-center ml-16">
       <div className={`w-28 h-28 rounded-lg flex flex-col items-center justify-center p-3 relative overflow-hidden ${
-        allStepsCompleted ? 'bg-green-500' : 'bg-primary/10'
+        allMilestonesCompleted ? 'bg-green-500' : 'bg-primary/10'
       }`}>
         
         {/* Glossy Green Overlay for Completed Goal */}
-        {allStepsCompleted && (
+        {allMilestonesCompleted && (
           <>
             {/* Base green gradient background */}
             <div className="absolute inset-0 bg-gradient-to-br from-green-400 via-green-500 to-emerald-600 rounded-lg" />
@@ -48,17 +48,17 @@ export function TimelineCompletionIndicator({
         )}
         
         <Target className={`w-7 h-7 mb-1 relative z-10 ${
-          allStepsCompleted ? 'text-white' : 'text-primary'
+          allMilestonesCompleted ? 'text-white' : 'text-primary'
         }`} />
         <p className={`text-xs font-medium text-center relative z-10 ${
-          allStepsCompleted ? 'text-white' : 'text-foreground'
+          allMilestonesCompleted ? 'text-white' : 'text-foreground'
         }`}>
           Complete
         </p>
         <p className={`text-xs text-center relative z-10 ${
-          allStepsCompleted ? 'text-green-100' : 'text-muted-foreground'
+          allMilestonesCompleted ? 'text-green-100' : 'text-muted-foreground'
         }`}>
-          {currentGoal ? `${currentGoal.getCompletedStepsCount()}/${currentGoal.getTotalStepsCount()}` : '0/0'}
+          {currentGoal ? `${currentGoal.getTotalMilestonesCount()} milestones` : '0 milestones'}
         </p>
       </div>
       <div className="mt-3 text-center">
@@ -67,7 +67,7 @@ export function TimelineCompletionIndicator({
       
       {/* Timeline line ending at completion */}
       <div className={`absolute right-full top-1/2 transform -translate-y-1/2 w-16 h-0.5 ${
-        allStepsCompleted ? 'bg-green-500' : 'bg-primary'
+        allMilestonesCompleted ? 'bg-green-500' : 'bg-primary'
       }`} />
     </div>
   )

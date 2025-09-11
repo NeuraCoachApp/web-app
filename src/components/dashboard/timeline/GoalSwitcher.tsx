@@ -45,7 +45,7 @@ export default function GoalSwitcher({
                   <span>{goal.text}</span>
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">
-                  {goal.getCompletedStepsCount()}/{goal.getTotalStepsCount()} steps completed
+                  {goal.getCompletedTasksCount()}/{goal.getTotalTasksCount()} tasks completed
                 </div>
               </button>
             ))}

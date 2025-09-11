@@ -5,7 +5,7 @@ import { useAuth } from '@/src/contexts/AuthContext'
 import { generateMockDataForCurrentUser, clearMockSessions, getMockGoals, generateAdditionalMockGoal } from '@/src/lib/mock-data'
 import { Database, Trash2, RefreshCw, Target } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
-import { goalsKeys, sessionsKeys } from '@/src/hooks/useGoals'
+import { goalsKeys } from '@/src/hooks/useGoals'
 
 export default function MockDataGenerator() {
   const { user } = useAuth()
@@ -50,7 +50,7 @@ export default function MockDataGenerator() {
         if (user?.id) {
           await Promise.all([
             queryClient.invalidateQueries({ queryKey: goalsKeys.user(user.id) }),
-            queryClient.invalidateQueries({ queryKey: sessionsKeys.user(user.id) }),
+            queryClient.invalidateQueries({ queryKey: goalsKeys.user(user.id) }),
             queryClient.invalidateQueries({ queryKey: ['onboarding', 'status', user.id] }),
             queryClient.invalidateQueries({ queryKey: ['goals', 'creation', 'status', user.id] })
           ])
@@ -84,14 +84,14 @@ export default function MockDataGenerator() {
     setMessage('🎯 Adding additional goal...')
 
     try {
-      const result = generateAdditionalMockGoal(user.id)
+      const result = await generateAdditionalMockGoal(user.id)
       
       if (result.success) {
         // Invalidate all relevant caches to trigger refetch
         if (user?.id) {
           await Promise.all([
             queryClient.invalidateQueries({ queryKey: goalsKeys.user(user.id) }),
-            queryClient.invalidateQueries({ queryKey: sessionsKeys.user(user.id) }),
+            queryClient.invalidateQueries({ queryKey: goalsKeys.user(user.id) }),
             queryClient.invalidateQueries({ queryKey: ['onboarding', 'status', user.id] }),
             queryClient.invalidateQueries({ queryKey: ['goals', 'creation', 'status', user.id] })
           ])
@@ -130,7 +130,7 @@ export default function MockDataGenerator() {
       // Invalidate all relevant caches to trigger refetch
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: goalsKeys.user(user.id) }),
-        queryClient.invalidateQueries({ queryKey: sessionsKeys.user(user.id) }),
+        queryClient.invalidateQueries({ queryKey: goalsKeys.user(user.id) }),
         queryClient.invalidateQueries({ queryKey: ['onboarding', 'status', user.id] }),
         queryClient.invalidateQueries({ queryKey: ['goals', 'creation', 'status', user.id] })
       ])

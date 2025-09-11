@@ -1,83 +1,136 @@
 import { Tables } from '@/src/types/database'
-import { Step } from './Step'
+import { Milestone } from './Milestone'
+import { Task } from './Task'
+import { Session } from './Session'
 
 export class Goal {
   public uuid: string
   public text: string
   public created_at: string
-  public end_at: string
-  public steps: Step[] = []
+  public init_end_at: string
+  public user_uuid: string
+  public milestones: Milestone[] = []
+  public tasks: Task[] = []
+  public sessions: Session[] = []
 
   constructor(data: Tables<'goal'>) {
     this.uuid = data.uuid
     this.text = data.text
     this.created_at = data.created_at
-    this.end_at = data.end_at
+    this.init_end_at = data.init_end_at
+    this.user_uuid = data.user_uuid
   }
 
   /**
-   * Add a step to this goal
+   * Add a milestone to this goal
    */
-  addStep(step: Step): void {
-    this.steps.push(step)
+  addMilestone(milestone: Milestone): void {
+    this.milestones.push(milestone)
   }
 
   /**
-   * Get all steps for this goal, sorted chronologically by deadline
-   * Steps appear in timeline order from earliest deadline to latest deadline
+   * Add a task to this goal
    */
-  getSteps(): Step[] {
-    return [...this.steps].sort((a, b) => {
-      // Sort purely by deadline (earliest first) for chronological timeline ordering
-      const aEndDate = new Date(a.end_at).getTime()
-      const bEndDate = new Date(b.end_at).getTime()
-      
-      return aEndDate - bEndDate
+  addTask(task: Task): void {
+    this.tasks.push(task)
+  }
+
+  /**
+   * Add a session to this goal
+   */
+  addSession(session: Session): void {
+    this.sessions.push(session)
+  }
+
+  /**
+   * Get all milestones for this goal, sorted chronologically by start date
+   */
+  getMilestones(): Milestone[] {
+    return [...this.milestones].sort((a, b) => {
+      const aStartDate = new Date(a.start_at).getTime()
+      const bStartDate = new Date(b.start_at).getTime()
+      return aStartDate - bStartDate
     })
   }
 
   /**
-   * Get completed steps count
+   * Get all tasks for this goal, sorted chronologically by start date
    */
-  getCompletedStepsCount(): number {
-    return this.steps.filter(step => step.isCompleted()).length
+  getTasks(): Task[] {
+    return [...this.tasks].sort((a, b) => {
+      const aStartDate = new Date(a.start_at).getTime()
+      const bStartDate = new Date(b.start_at).getTime()
+      return aStartDate - bStartDate
+    })
   }
 
   /**
-   * Get total steps count
+   * Get all sessions for this goal, sorted by creation date (newest first)
    */
-  getTotalStepsCount(): number {
-    return this.steps.length
+  getSessions(): Session[] {
+    return [...this.sessions].sort((a, b) => {
+      const aDate = new Date(a.created_at).getTime()
+      const bDate = new Date(b.created_at).getTime()
+      return bDate - aDate
+    })
   }
 
   /**
-   * Get completion percentage
+   * Get completed tasks count
+   */
+  getCompletedTasksCount(): number {
+    return this.tasks.filter(task => task.isCompleted).length
+  }
+
+  /**
+   * Get total tasks count
+   */
+  getTotalTasksCount(): number {
+    return this.tasks.length
+  }
+
+  /**
+   * Get completion percentage based on tasks
    */
   getCompletionPercentage(): number {
-    const totalSteps = this.getTotalStepsCount()
-    if (totalSteps === 0) return 0
-    return Math.round((this.getCompletedStepsCount() / totalSteps) * 100)
+    const totalTasks = this.getTotalTasksCount()
+    if (totalTasks === 0) return 0
+    return Math.round((this.getCompletedTasksCount() / totalTasks) * 100)
   }
 
   /**
-   * Get all sessions from all steps
+   * Get total milestones count
    */
-  getAllSessions() {
-    return this.steps.flatMap(step => step.getSessions())
+  getTotalMilestonesCount(): number {
+    return this.milestones.length
   }
 
   /**
-   * Get total sessions count across all steps
+   * Get total sessions count
    */
   getTotalSessionsCount(): number {
-    return this.getAllSessions().length
+    return this.sessions.length
   }
 
   /**
-   * Get steps that have sessions
+   * Get latest session
    */
-  getActiveStepsCount(): number {
-    return this.steps.filter(step => step.getSessions().length > 0).length
+  getLatestSession(): Session | null {
+    const sessions = this.getSessions()
+    return sessions.length > 0 ? sessions[0] : null
+  }
+
+  /**
+   * Get sessions from the last N days
+   */
+  getRecentSessions(days: number = 7): Session[] {
+    const cutoffDate = new Date()
+    cutoffDate.setDate(cutoffDate.getDate() - days)
+    
+    return this.sessions.filter(session => {
+      const sessionDate = new Date(session.created_at)
+      return sessionDate >= cutoffDate
+    })
   }
 
   /**
@@ -88,17 +141,27 @@ export class Goal {
       uuid: this.uuid,
       text: this.text,
       created_at: this.created_at,
-      end_at: this.end_at,
-      steps: this.steps.map(step => step.toJSON())
+      init_end_at: this.init_end_at,
+      user_uuid: this.user_uuid,
+      milestones: this.milestones.map(milestone => milestone.toJSON()),
+      tasks: this.tasks.map(task => task.toJSON()),
+      sessions: this.sessions.map(session => session.toJSON())
     }
   }
 
   /**
-   * Create Goal instance from database row with steps
+   * Create Goal instance from database row with related data
    */
-  static fromDatabaseWithSteps(goalData: Tables<'goal'>, steps: Step[] = []): Goal {
+  static fromDatabaseWithRelations(
+    goalData: Tables<'goal'>, 
+    milestones: Milestone[] = [],
+    tasks: Task[] = [],
+    sessions: Session[] = []
+  ): Goal {
     const goal = new Goal(goalData)
-    steps.forEach(step => goal.addStep(step))
+    milestones.forEach(milestone => goal.addMilestone(milestone))
+    tasks.forEach(task => goal.addTask(task))
+    sessions.forEach(session => goal.addSession(session))
     return goal
   }
 }

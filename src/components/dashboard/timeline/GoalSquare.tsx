@@ -2,16 +2,16 @@ import React from 'react'
 import { Target } from 'lucide-react'
 import { GoalSquareProps } from './types'
 
-export default function GoalSquare({ goal, allStepsCompleted }: GoalSquareProps) {
+export default function GoalSquare({ goal, allMilestonesCompleted }: GoalSquareProps) {
   return (
     <div className="relative flex flex-col items-center mr-20">
       <div className={`w-32 h-32 rounded-lg cursor-pointer 
                    transition-all duration-200 hover:shadow-lg hover:scale-105
                    flex flex-col items-center justify-center p-4 relative overflow-hidden
-                   ${allStepsCompleted ? 'bg-green-500' : 'bg-primary'}`}>
+                   ${allMilestonesCompleted ? 'bg-green-500' : 'bg-primary'}`}>
         
         {/* Glossy Green Overlay for Completed Goal */}
-        {allStepsCompleted && (
+        {allMilestonesCompleted && (
           <>
             {/* Base green gradient background */}
             <div className="absolute inset-0 bg-gradient-to-br from-green-400 via-green-500 to-emerald-600 rounded-lg" />

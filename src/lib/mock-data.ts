@@ -1,105 +1,178 @@
 import { supabase } from './supabase'
 import { Tables } from '@/src/types/database'
-import { Goal, Step, Session, Insight } from '@/src/classes'
-import { SessionWithGoalAndInsight } from '@/src/hooks/useGoals'
+import { Goal, Milestone, Task, Session } from '@/src/classes'
 
-
-// Sample goal and step data - Each step is a binary yes/no action
+// Sample goal and task data - Each task is a binary yes/no action
 const SAMPLE_GOALS = [
   {
     text: "Build a Sustainable Morning Routine",
-    steps: [
-      "Wake up at 6:00 AM",
-      "Drink a glass of water upon waking",
-      "Complete 10 minutes of meditation",
-      "Write in gratitude journal for 5 minutes",
-      "Do 15 minutes of light stretching",
-      "Eat a healthy breakfast",
-      "Review daily priorities and goals",
-      "Read for 20 minutes",
-      "Take a cold shower",
-      "Set positive intentions for the day"
+    milestones: [
+      {
+        text: "Establish Wake-up Routine",
+        tasks: [
+          "Wake up at 6:00 AM",
+          "Drink a glass of water upon waking",
+          "Set positive intentions for the day"
+        ]
+      },
+      {
+        text: "Create Mindfulness Practice",
+        tasks: [
+          "Complete 10 minutes of meditation",
+          "Write in gratitude journal for 5 minutes",
+          "Do 15 minutes of light stretching"
+        ]
+      },
+      {
+        text: "Build Healthy Habits",
+        tasks: [
+          "Eat a healthy breakfast",
+          "Review daily priorities and goals",
+          "Read for 20 minutes",
+          "Take a cold shower"
+        ]
+      }
     ]
   },
   {
     text: "Learn Spanish Fluently in 6 Months",
-    steps: [
-      "Complete today's Duolingo lesson",
-      "Watch 30 minutes of Spanish content",
-      "Practice speaking for 15 minutes",
-      "Learn 10 new Spanish vocabulary words",
-      "Listen to Spanish podcast during commute",
-      "Read one Spanish news article",
-      "Write journal entry in Spanish",
-      "Attend Spanish conversation group meeting",
-      "Complete grammar lesson online",
-      "Research Spanish-speaking travel destinations"
+    milestones: [
+      {
+        text: "Build Daily Practice",
+        tasks: [
+          "Complete today's Duolingo lesson",
+          "Watch 30 minutes of Spanish content",
+          "Practice speaking for 15 minutes",
+          "Learn 10 new Spanish vocabulary words"
+        ]
+      },
+      {
+        text: "Immerse in Spanish Media",
+        tasks: [
+          "Listen to Spanish podcast during commute",
+          "Read one Spanish news article",
+          "Write journal entry in Spanish"
+        ]
+      },
+      {
+        text: "Practice with Community",
+        tasks: [
+          "Attend Spanish conversation group meeting",
+          "Complete grammar lesson online",
+          "Research Spanish-speaking travel destinations"
+        ]
+      }
     ]
   },
   {
     text: "Launch My Side Business",
-    steps: [
-      "Complete market research analysis",
-      "Define target audience personas",
-      "Write business plan draft",
-      "Register business name and get licenses",
-      "Build MVP prototype",
-      "Create brand logo and guidelines",
-      "Launch business website",
-      "Release beta version to test users",
-      "Collect and analyze user feedback",
-      "Execute first marketing campaign"
+    milestones: [
+      {
+        text: "Research and Planning",
+        tasks: [
+          "Complete market research analysis",
+          "Define target audience personas",
+          "Write business plan draft"
+        ]
+      },
+      {
+        text: "Legal and Branding",
+        tasks: [
+          "Register business name and get licenses",
+          "Create brand logo and guidelines",
+          "Launch business website"
+        ]
+      },
+      {
+        text: "Product Development",
+        tasks: [
+          "Build MVP prototype",
+          "Release beta version to test users",
+          "Collect and analyze user feedback",
+          "Execute first marketing campaign"
+        ]
+      }
     ]
   },
   {
     text: "Get Fit and Healthy",
-    steps: [
-      "Complete 30-minute workout",
-      "Drink 8 glasses of water",
-      "Eat 5 servings of fruits and vegetables",
-      "Take 10,000 steps",
-      "Get 8 hours of sleep",
-      "Prepare healthy meals for tomorrow",
-      "Do 10 minutes of stretching",
-      "Track calories and macros",
-      "Take vitamins and supplements",
-      "Meditate for stress relief"
+    milestones: [
+      {
+        text: "Daily Fitness Routine",
+        tasks: [
+          "Complete 30-minute workout",
+          "Take 10,000 steps",
+          "Do 10 minutes of stretching"
+        ]
+      },
+      {
+        text: "Nutrition and Hydration",
+        tasks: [
+          "Drink 8 glasses of water",
+          "Eat 5 servings of fruits and vegetables",
+          "Prepare healthy meals for tomorrow",
+          "Track calories and macros"
+        ]
+      },
+      {
+        text: "Recovery and Wellness",
+        tasks: [
+          "Get 8 hours of sleep",
+          "Take vitamins and supplements",
+          "Meditate for stress relief"
+        ]
+      }
     ]
   },
   {
     text: "Master Guitar Playing",
-    steps: [
-      "Practice scales for 15 minutes",
-      "Learn one new chord",
-      "Play through favorite song",
-      "Practice fingerpicking technique",
-      "Record today's practice session",
-      "Watch guitar tutorial video",
-      "Tune guitar properly",
-      "Practice rhythm patterns",
-      "Work on chord transitions",
-      "Play with metronome for timing"
+    milestones: [
+      {
+        text: "Technical Skills",
+        tasks: [
+          "Practice scales for 15 minutes",
+          "Learn one new chord",
+          "Practice fingerpicking technique",
+          "Work on chord transitions"
+        ]
+      },
+      {
+        text: "Musical Expression",
+        tasks: [
+          "Play through favorite song",
+          "Practice rhythm patterns",
+          "Play with metronome for timing"
+        ]
+      },
+      {
+        text: "Learning and Recording",
+        tasks: [
+          "Record today's practice session",
+          "Watch guitar tutorial video",
+          "Tune guitar properly"
+        ]
+      }
     ]
   }
 ]
 
-// Sample insight summaries for binary yes/no actions
-const INSIGHT_SUMMARIES = [
-  "Successfully completed this step! Great job staying committed to your goal.",
+// Sample session summaries for task completion
+const SESSION_SUMMARIES = [
+  "Successfully completed this task! Great job staying committed to your goal.",
   "Accomplished this task despite some initial resistance. Building discipline!",
   "Knocked this one out efficiently. You're developing a strong routine.",
   "Completed with focus and intention. Quality execution today.",
   "Got it done even though motivation was low. That's real progress.",
-  "Finished this step and discovered it was easier than expected.",
+  "Finished this task and discovered it was easier than expected.",
   "Pushed through and completed it. Overcoming resistance builds strength.",
-  "Executed this step smoothly. You're getting into a good rhythm.",
+  "Executed this task smoothly. You're getting into a good rhythm.",
   "Completed successfully after adjusting your approach. Flexibility wins.",
-  "Achieved this step and it felt like a meaningful milestone.",
+  "Achieved this task and it felt like a meaningful milestone.",
   "Completed this in a focused flow state. Excellent concentration.",
   "Got it done despite obstacles. Resilience is your superpower.",
-  "Finished this step and made valuable connections in the process.",
+  "Finished this task and made valuable connections in the process.",
   "Completed efficiently with an improved method. Great optimization!",
-  "Successfully completed this step. Small consistent wins add up big."
+  "Successfully completed this task. Small consistent wins add up big."
 ]
 
 /**
@@ -129,16 +202,15 @@ function getDateNDaysAgo(daysAgo: number): Date {
 }
 
 /**
- * Generate client-side mock goal with steps and sessions (no database insertion)
- * Creates sequential step progression where:
- * - Only first N steps are completed (40-70% completion rate)
- * - Steps are ordered chronologically by deadline from goal start date
- * - Each step gets a deadline progressively later from goal start (step 1, 2, 3... in order)
- * - This creates a natural timeline showing goal progression from start to finish
+ * Generate client-side mock goal with milestones, tasks and sessions (no database insertion)
+ * Creates realistic goal progression with:
+ * - Multiple milestones with tasks
+ * - Some tasks completed, some in progress
+ * - Sessions for task progress tracking
  */
 export function generateMockGoalData(userId: string): { success: boolean; data?: Goal; error?: any } {
   try {
-    console.log('🎯 Generating 7-day scheduled mock goal data for user:', userId)
+    console.log('🎯 Generating mock goal data for user:', userId)
 
     // Select a random goal template
     const goalTemplate = SAMPLE_GOALS[Math.floor(Math.random() * SAMPLE_GOALS.length)]
@@ -151,249 +223,78 @@ export function generateMockGoalData(userId: string): { success: boolean; data?:
       uuid: `goal-${Date.now()}`,
       text: goalTemplate.text,
       created_at: goalStartDate.toISOString(),
-      end_at: new Date(goalStartDate.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days from goal start
+      init_end_at: new Date(goalStartDate.getTime() + 90 * 24 * 60 * 60 * 1000).toISOString(), // 90 days from start
+      user_uuid: userId
     })
 
-    console.log('✅ Created mock goal:', goal.text, 'started 7 days ago')
+    console.log('✅ Created mock goal:', goal.text)
 
-    // Create step UUIDs
-    const stepUuids: string[] = []
-    for (let i = 0; i < goalTemplate.steps.length; i++) {
-      const stepUuid = `step-${Date.now()}-${i}`
-      stepUuids.push(stepUuid)
-    }
-
-    // Create sequential step progression with proper deadline ordering
-    const totalSteps = Math.min(goalTemplate.steps.length, 10) // Use up to 10 steps
+    // Create milestones and tasks
+    let currentDate = new Date(goalStartDate)
     
-    // Determine how many steps should be completed (realistic progression over 7 days)
-    // Complete 40-70% of steps to show realistic progress
-    const completionRate = randomBetween(40, 70) / 100
-    const stepsToComplete = Math.floor(totalSteps * completionRate)
-    
-    console.log(`📊 Planning to complete ${stepsToComplete} out of ${totalSteps} steps (${Math.round(completionRate * 100)}% completion rate)`)
-    
-    // Track step completion - only sequential completion allowed
-    let stepsCompleted: boolean[] = new Array(totalSteps).fill(false)
-    
-    // Mark first N steps as completed in sequence
-    for (let i = 0; i < stepsToComplete; i++) {
-      stepsCompleted[i] = true
-    }
-    
-    // Create a schedule where completed steps get sessions in earlier days
-    // and incomplete steps get sessions in later days
-    const dailySchedule: { [day: number]: number[] } = {}
-    
-    // Initialize all days with empty arrays
-    for (let day = 0; day < 7; day++) {
-      dailySchedule[day] = []
-    }
-    
-    // Distribute completed steps across first 5 days (days 0-4)
-    const completedDays = 5
-    let completedStepsAssigned = 0
-    
-    for (let day = 0; day < completedDays && completedStepsAssigned < stepsToComplete; day++) {
-      // Assign 1-2 completed steps per day
-      const stepsForDay = Math.min(randomBetween(1, 2), stepsToComplete - completedStepsAssigned)
+    goalTemplate.milestones.forEach((milestoneTemplate, milestoneIndex) => {
+      // Create milestone
+      const milestoneStartDate = new Date(currentDate)
+      const milestoneEndDate = new Date(currentDate.getTime() + 30 * 24 * 60 * 60 * 1000) // 30 days duration
       
-      for (let i = 0; i < stepsForDay && completedStepsAssigned < stepsToComplete; i++) {
-        dailySchedule[day].push(completedStepsAssigned)
-        completedStepsAssigned++
-      }
-    }
-    
-    // Assign remaining incomplete steps to later days (days 5-6)
-    // Focus on the next 1-2 steps that user is currently working on
-    const incompleteDays = [5, 6]
-    const currentWorkingStepIndex = stepsToComplete // First incomplete step
-    
-    if (currentWorkingStepIndex < totalSteps) {
-      // Assign current working step to day 5
-      dailySchedule[5].push(currentWorkingStepIndex)
-      
-      // Maybe assign next step to day 6 if it exists
-      if (currentWorkingStepIndex + 1 < totalSteps && Math.random() < 0.6) {
-        dailySchedule[6].push(currentWorkingStepIndex + 1)
-      }
-    }
-    
-    // Ensure every day has at least one step
-    for (let day = 0; day < 7; day++) {
-      if (dailySchedule[day].length === 0) {
-        if (day < 5 && stepsToComplete > 0) {
-          // Early days should have completed steps
-          const randomCompletedStep = Math.floor(Math.random() * stepsToComplete)
-          dailySchedule[day].push(randomCompletedStep)
-        } else {
-          // Later days should have current working step
-          const workingStep = Math.min(stepsToComplete, totalSteps - 1)
-          dailySchedule[day].push(workingStep)
-        }
-      }
-    }
-
-    console.log('📅 Sequential daily schedule:', dailySchedule)
-    console.log('📊 Steps completion status:', stepsCompleted)
-
-    // Create steps with proper deadline ordering
-    // Steps should have deadlines that result in incomplete steps appearing first when sorted
-    for (let i = 0; i < totalSteps; i++) {
-      const stepText = goalTemplate.steps[i]
-      
-      // Find which days this step is assigned to (it might appear on multiple days)
-      const assignedDays = Object.keys(dailySchedule).filter(day => 
-        dailySchedule[parseInt(day)].includes(i)
-      ).map(day => parseInt(day))
-      
-      // Step creation date: all steps were created when goal started (7 days ago)
-      const stepCreatedAt = new Date(goalStartDate)
-      stepCreatedAt.setHours(6, 0, 0, 0) // 6 AM
-      
-      // Step end date logic: chronological ordering from goal start date
-      // Each step gets a deadline that's progressively later from the goal start
-      // This creates a natural timeline progression regardless of completion status
-      let stepEndAt: Date
-      
-      // Calculate step deadline as goal start + (step index * days per step)
-      // Spread steps across the goal duration (7 days) plus some buffer
-      const goalDurationDays = 7
-      const totalDurationDays = goalDurationDays + 3 // Add 3 days buffer for incomplete steps
-      const daysPerStep = totalDurationDays / totalSteps
-      const stepDeadlineDays = Math.ceil((i + 1) * daysPerStep)
-      
-      stepEndAt = new Date(goalStartDate)
-      stepEndAt.setDate(stepEndAt.getDate() + stepDeadlineDays)
-      stepEndAt.setHours(23, 59, 59, 999)
-      
-      // Create Step class instance
-      const step = new Step({
-        uuid: stepUuids[i],
-        text: stepText,
-        isCompleted: false, // Will be determined by session progress
-        created_at: stepCreatedAt.toISOString(),
-        end_at: stepEndAt.toISOString(),
-        next_step: i < totalSteps - 1 ? stepUuids[i + 1] : null
+      const milestone = new Milestone({
+        uuid: `milestone-${Date.now()}-${milestoneIndex}`,
+        text: milestoneTemplate.text,
+        start_at: milestoneStartDate.toISOString(),
+        end_at: milestoneEndDate.toISOString(),
+        goal_uuid: goal.uuid
       })
-
-      // Generate sessions for each day this step is assigned
-      const isStepCompleted = stepsCompleted[i]
-      let allSessions: { dayIndex: number; sessionDate: Date; sessionTime: Date }[] = []
       
-      // Only create sessions for days that have this step assigned
-      if (assignedDays.length > 0) {
-        for (const dayIndex of assignedDays) {
-          const sessionDate = getDateNDaysAgo(6 - dayIndex)
-          
-          // Generate 1-2 sessions for this step on this day
-          const sessionsThisDay = randomBetween(1, 2)
-          
-          for (let j = 0; j < sessionsThisDay; j++) {
-            // Create session at random time during the day
-            const sessionTime = new Date(sessionDate)
-            sessionTime.setHours(
-              randomBetween(8, 20), // Between 8 AM and 8 PM
-              randomBetween(0, 59),
-              randomBetween(0, 59)
-            )
-            
-            allSessions.push({ dayIndex, sessionDate, sessionTime })
-          }
-        }
+      // Create tasks for this milestone
+      milestoneTemplate.tasks.forEach((taskText, taskIndex) => {
+        const taskStartDate = new Date(milestoneStartDate.getTime() + taskIndex * 7 * 24 * 60 * 60 * 1000) // 7 days apart
+        const taskEndDate = new Date(taskStartDate.getTime() + 7 * 24 * 60 * 60 * 1000) // 7 days duration
         
-        // Sort sessions chronologically to identify the last one
-        allSessions.sort((a, b) => a.sessionTime.getTime() - b.sessionTime.getTime())
-      }
-      
-      // Create sessions with proper progress values
-      allSessions.forEach((sessionInfo, sessionIndex) => {
-        const isLastSession = sessionIndex === allSessions.length - 1
+        const isCompleted = Math.random() < 0.6 // 60% chance of completion
         
-        // Determine progress for this session
-        let progress: number
-        if (isStepCompleted && isLastSession) {
-          // Last session of a completed step MUST be 100%
-          progress = 100
-        } else if (isStepCompleted) {
-          // Earlier sessions of completed steps have high but not 100% progress
-          progress = randomBetween(60, 95)
-        } else {
-          // Incomplete steps have partial progress, never 100%
-          progress = randomBetween(20, 85)
-        }
-        
-        // Create Insight class instance
-        const insight = new Insight({
-          uuid: `insight-${Date.now()}-${i}-${sessionIndex}-${sessionInfo.dayIndex}`,
-          summary: progress === 100 
-            ? `Completed: ${stepText.substring(0, 60)}${stepText.length > 60 ? '...' : ''}` 
-            : `Working on: ${stepText.substring(0, 60)}${stepText.length > 60 ? '...' : ''}`,
-          progress,
-          effort_level: randomBetween(3, 10),
-          stress_level: randomBetween(1, 7),
-          step_uuid: stepUuids[i],
-          created_at: sessionInfo.sessionTime.toISOString()
-        })
-        insight.setStep(step)
-
-        // Create Session class instance
-        const session = new Session({
-          uuid: `session-${Date.now()}-${i}-${sessionIndex}-${sessionInfo.dayIndex}`,
-          created_at: sessionInfo.sessionTime.toISOString(),
+        const task = new Task({
+          uuid: `task-${Date.now()}-${milestoneIndex}-${taskIndex}`,
+          text: taskText,
+          created_at: goalStartDate.toISOString(),
+          start_at: taskStartDate.toISOString(),
+          end_at: taskEndDate.toISOString(),
+          isCompleted,
           goal_uuid: goal.uuid,
-          insight_uuid: insight.uuid,
-          user_uuid: userId
+          milestone_uuid: milestone.uuid
         })
-        session.setGoal(goal)
-        session.setInsight(insight)
-
-        step.addSession(session)
+        
+        // Create 1-3 sessions for each task
+        const sessionCount = randomBetween(1, 3)
+        for (let sessionIndex = 0; sessionIndex < sessionCount; sessionIndex++) {
+          const sessionDate = new Date(taskStartDate.getTime() + sessionIndex * 2 * 24 * 60 * 60 * 1000) // Every 2 days
+          sessionDate.setHours(randomBetween(8, 20), randomBetween(0, 59))
+          
+          const session = new Session({
+            uuid: `session-${Date.now()}-${milestoneIndex}-${taskIndex}-${sessionIndex}`,
+            created_at: sessionDate.toISOString(),
+            goal_uuid: goal.uuid,
+            user_uuid: userId,
+            summary: SESSION_SUMMARIES[Math.floor(Math.random() * SESSION_SUMMARIES.length)],
+            mood: randomBetween(5, 9),
+            motivation: randomBetween(5, 9),
+            blocker: Math.random() < 0.3 ? "Had some challenges but pushed through" : "",
+            completion: isCompleted ? [taskText] : []
+          })
+          
+          session.setGoal(goal)
+          goal.addSession(session)
+        }
+        
+        goal.addTask(task)
       })
       
-      // Log sessions per day
-      if (assignedDays.length > 0) {
-        const sessionsByDay = assignedDays.map(dayIndex => {
-          const sessionsThisDay = allSessions.filter(s => s.dayIndex === dayIndex).length
-          console.log(`📝 Created ${sessionsThisDay} sessions for step "${stepText.substring(0, 30)}..." on day ${dayIndex + 1}`)
-          return sessionsThisDay
-        })
-      }
-      
-      console.log(`✅ Created step "${stepText.substring(0, 30)}..." with ${step.getSessions().length} total sessions (completed: ${isStepCompleted}) [deadline: ${stepEndAt.toDateString()}]`)
-      goal.addStep(step)
-    }
-
-    // Log the schedule summary
-    console.log('📊 7-Day Sequential Schedule Summary:')
-    for (let day = 0; day < 7; day++) {
-      const date = getDateNDaysAgo(6 - day)
-      const stepIndices = dailySchedule[day] || []
-      const stepNames = stepIndices.map(i => `Step ${i + 1}${stepsCompleted[i] ? '✅' : '⭕'}`).join(', ')
-      const totalSessions = stepIndices.reduce((sum, stepIndex) => {
-        const step = goal.getSteps()[stepIndex]
-        return sum + (step?.getSessions().filter(session => {
-          const sessionDate = new Date(session.created_at)
-          return sessionDate.toDateString() === date.toDateString()
-        }).length || 0)
-      }, 0)
-      
-      console.log(`  Day ${day + 1} (${date.toDateString()}): ${stepIndices.length} steps assigned [${stepNames}], ${totalSessions} sessions`)
-    }
-
-    // Log the final step ordering as it will appear in the timeline
-    const finalSteps = goal.getSteps()
-    console.log('🎯 Final Step Order (chronological by deadline from goal start):')
-    finalSteps.forEach((step, index) => {
-      const status = step.isCompleted() ? '✅ Completed' : '⭕ Incomplete'
-      const deadline = step.getFormattedEndDate()
-      const originalIndex = stepUuids.findIndex(uuid => uuid === step.uuid)
-      console.log(`  ${index + 1}. [Step ${originalIndex + 1}] ${step.text.substring(0, 35)}... [${status}] [Deadline: ${deadline}]`)
+      goal.addMilestone(milestone)
+      currentDate = new Date(milestoneEndDate.getTime() + 7 * 24 * 60 * 60 * 1000) // 1 week gap between milestones
     })
 
-    console.log('🎉 Successfully generated sequential mock goal data!')
-    console.log(`📊 Created: 1 goal with ${goal.getTotalStepsCount()} steps and ${goal.getTotalSessionsCount()} total sessions`)
-    console.log(`📈 Progress: ${stepsToComplete}/${totalSteps} steps completed (${Math.round((stepsToComplete/totalSteps) * 100)}%)`)
+    console.log('🎉 Successfully generated mock goal data!')
+    console.log(`📊 Created: 1 goal with ${goal.getTotalMilestonesCount()} milestones, ${goal.getTotalTasksCount()} tasks, and ${goal.getTotalSessionsCount()} sessions`)
+    console.log(`📈 Progress: ${goal.getCompletedTasksCount()}/${goal.getTotalTasksCount()} tasks completed (${goal.getCompletionPercentage()}%)`)
     
     return { success: true, data: goal }
   } catch (error) {
@@ -406,7 +307,7 @@ export function generateMockGoalData(userId: string): { success: boolean; data?:
 let mockGoalsStore: { [userId: string]: Goal[] } = {}
 
 /**
- * Generate mock data for current authenticated user (client-side only)
+ * Generate mock data for current authenticated user and insert into database
  */
 export async function generateMockDataForCurrentUser(): Promise<{ success: boolean; data?: Goal; error?: any }> {
   try {
@@ -418,20 +319,109 @@ export async function generateMockDataForCurrentUser(): Promise<{ success: boole
       return { success: false, error: userError || 'No authenticated user' }
     }
 
-    const result = generateMockGoalData(user.id)
+    console.log('🎯 Generating and inserting mock goal data into database for user:', user.id)
+
+    // Select a random goal template
+    const goalTemplate = SAMPLE_GOALS[Math.floor(Math.random() * SAMPLE_GOALS.length)]
     
-    if (result.success && result.data) {
-      // Store the mock data for this user (add to existing goals or create new array)
-      if (!mockGoalsStore[user.id]) {
-        mockGoalsStore[user.id] = []
-      }
-      mockGoalsStore[user.id].push(result.data)
-      console.log(`🗃️ Stored mock goal with ${result.data.getTotalStepsCount()} steps for user ${user.id}. Total goals: ${mockGoalsStore[user.id].length}`)
+    // Create goal in database
+    const { data: goalData, error: goalError } = await supabase
+      .from('goal')
+      .insert({
+        text: goalTemplate.text,
+        init_end_at: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(), // 90 days from now
+        user_uuid: user.id
+      })
+      .select()
+      .single()
+
+    if (goalError || !goalData) {
+      console.error('❌ Failed to create goal:', goalError)
+      return { success: false, error: goalError }
     }
+
+    console.log('✅ Created goal in database:', goalData.uuid)
+
+    // Create milestones and tasks for the goal
+    for (let milestoneIndex = 0; milestoneIndex < goalTemplate.milestones.length; milestoneIndex++) {
+      const milestoneTemplate = goalTemplate.milestones[milestoneIndex]
+      const milestoneStartDate = new Date(Date.now() + milestoneIndex * 30 * 24 * 60 * 60 * 1000) // 30 days apart
+      const milestoneEndDate = new Date(milestoneStartDate.getTime() + 30 * 24 * 60 * 60 * 1000) // 30 days duration
+
+      // Create milestone in database
+      const { data: milestoneData, error: milestoneError } = await supabase
+        .from('milestone')
+        .insert({
+          text: milestoneTemplate.text,
+          start_at: milestoneStartDate.toISOString(),
+          end_at: milestoneEndDate.toISOString(),
+          goal_uuid: goalData.uuid
+        })
+        .select()
+        .single()
+
+      if (milestoneError || !milestoneData) {
+        console.warn('⚠️ Failed to create milestone:', milestoneError)
+        continue
+      }
+
+      console.log('✅ Created milestone:', milestoneData.uuid)
+
+      // Create tasks for this milestone
+      for (let taskIndex = 0; taskIndex < milestoneTemplate.tasks.length; taskIndex++) {
+        const taskText = milestoneTemplate.tasks[taskIndex]
+        const taskStartDate = new Date(milestoneStartDate.getTime() + taskIndex * 7 * 24 * 60 * 60 * 1000) // 7 days apart
+        const taskEndDate = new Date(taskStartDate.getTime() + 7 * 24 * 60 * 60 * 1000) // 7 days duration
+
+        const { data: taskData, error: taskError } = await supabase
+          .from('task')
+          .insert({
+            text: taskText,
+            start_at: taskStartDate.toISOString(),
+            end_at: taskEndDate.toISOString(),
+            goal_uuid: goalData.uuid,
+            milestone_uuid: milestoneData.uuid,
+            isCompleted: Math.random() < 0.6 // 60% chance of completion
+          })
+          .select()
+          .single()
+
+        if (taskError || !taskData) {
+          console.warn('⚠️ Failed to create task:', taskError)
+          continue
+        }
+
+        // Create 1-2 sessions for each task
+        const sessionCount = Math.floor(Math.random() * 2) + 1
+        for (let sessionIndex = 0; sessionIndex < sessionCount; sessionIndex++) {
+          const sessionDate = new Date(taskStartDate.getTime() + sessionIndex * 2 * 24 * 60 * 60 * 1000) // Every 2 days
+          sessionDate.setHours(Math.floor(Math.random() * 12) + 8, Math.floor(Math.random() * 60)) // 8AM-8PM
+
+          await supabase
+            .from('session')
+            .insert({
+              goal_uuid: goalData.uuid,
+              user_uuid: user.id,
+              summary: SESSION_SUMMARIES[Math.floor(Math.random() * SESSION_SUMMARIES.length)],
+              mood: Math.floor(Math.random() * 5) + 5, // 5-9
+              motivation: Math.floor(Math.random() * 5) + 5, // 5-9
+              blocker: Math.random() < 0.3 ? "Had some challenges but pushed through" : "",
+              completion: taskData.isCompleted ? [taskText] : [],
+              created_at: sessionDate.toISOString()
+            })
+        }
+
+        console.log('✅ Created task with sessions:', taskData.uuid)
+      }
+    }
+
+    // Create a Goal class instance for return (though it won't have all the relations populated)
+    const goal = new Goal(goalData)
     
-    return result
+    console.log('🎉 Successfully generated and inserted mock data into database!')
+    return { success: true, data: goal }
   } catch (error) {
-    console.error('Error getting current user:', error)
+    console.error('❌ Error generating mock data:', error)
     return { success: false, error }
   }
 }
@@ -462,77 +452,14 @@ export function getMockGoalByIndex(userId: string, index: number): Goal | null {
 /**
  * Get mock sessions for a user (flattened from all goals)
  */
-export function getMockSessions(userId: string): SessionWithGoalAndInsight[] {
+export function getMockSessions(userId: string): Session[] {
   const goals = mockGoalsStore[userId]
   if (!goals) return []
   
-  // Convert Session class instances to SessionWithGoalAndInsight format
-  return goals.flatMap(goal => 
-    goal.getAllSessions().map(session => ({
-      goal: {
-        uuid: goal.uuid,
-        text: goal.text,
-        created_at: goal.created_at,
-        end_at: goal.end_at
-      } as Tables<'goal'>,
-      insight: {
-        uuid: session.getInsight()?.uuid || '',
-        summary: session.getInsight()?.summary || '',
-        progress: session.getInsight()?.progress || 0,
-        effort_level: session.getInsight()?.effort_level || 0,
-        stress_level: session.getInsight()?.stress_level || 0,
-        step_uuid: session.getInsight()?.step_uuid || '',
-        created_at: session.getInsight()?.created_at || session.created_at
-      } as Tables<'insight'>,
-      created_at: session.created_at
-    }))
-  )
+  // Return Session class instances directly
+  return goals.flatMap(goal => goal.getSessions())
 }
 
-/**
- * Sort steps based on completion status and next_step linked list relationship
- * Completed steps appear first, then incomplete steps in their natural order
- * @deprecated Use Step class methods instead
- */
-export function sortStepsByNextStep(steps: Step[]): Step[] {
-  if (steps.length === 0) return []
-  
-  // First, build the complete ordered chain using next_step relationships
-  const referencedSteps = new Set(steps.map(step => step.next_step).filter(Boolean))
-  const firstStep = steps.find(step => !referencedSteps.has(step.uuid))
-  
-  if (!firstStep) {
-    console.warn('Could not find first step, sorting by completion status only')
-    return [...steps].sort((a, b) => {
-      const aCompleted = a.isCompleted()
-      const bCompleted = b.isCompleted()
-      if (aCompleted === bCompleted) return 0
-      return aCompleted ? -1 : 1 // Completed steps first
-    })
-  }
-  
-  // Build the complete ordered list by following next_step references
-  const completeOrderedSteps: Step[] = []
-  const stepMap = new Map(steps.map(step => [step.uuid, step]))
-  
-  let currentStep: Step | undefined = firstStep
-  while (currentStep) {
-    completeOrderedSteps.push(currentStep)
-    currentStep = currentStep.next_step ? stepMap.get(currentStep.next_step) : undefined
-  }
-  
-  // Now separate completed and incomplete steps while maintaining their relative order
-  const completedSteps = completeOrderedSteps.filter(step => step.isCompleted())
-  const incompleteSteps = completeOrderedSteps.filter(step => !step.isCompleted())
-  
-  // Return completed steps first, then incomplete steps
-  const finalOrder = [...completedSteps, ...incompleteSteps]
-  
-  console.log(`🔗 Sorted ${finalOrder.length} steps: ${completedSteps.length} completed first, then ${incompleteSteps.length} incomplete`)
-  console.log(`📋 Order: ${finalOrder.map((s, i) => `${i + 1}.${s.isCompleted() ? '✅' : '⭕'}`).join(' ')}`)
-  
-  return finalOrder
-}
 
 /**
  * Clear mock data for a user
@@ -545,18 +472,13 @@ export function clearMockSessions(userId: string): void {
 /**
  * Generate additional mock goal for a user
  */
-export function generateAdditionalMockGoal(userId: string): { success: boolean; data?: Goal; error?: any } {
-  const result = generateMockGoalData(userId)
-  
-  if (result.success && result.data) {
-    if (!mockGoalsStore[userId]) {
-      mockGoalsStore[userId] = []
-    }
-    mockGoalsStore[userId].push(result.data)
-    console.log(`➕ Added additional goal for user ${userId}. Total goals: ${mockGoalsStore[userId].length}`)
+export async function generateAdditionalMockGoal(userId: string): Promise<{ success: boolean; data?: Goal; error?: any }> {
+  try {
+    return await generateMockDataForCurrentUser()
+  } catch (error) {
+    console.error('❌ Error generating additional mock goal:', error)
+    return { success: false, error }
   }
-  
-  return result
 }
 
 /**
@@ -565,8 +487,8 @@ export function generateAdditionalMockGoal(userId: string): { success: boolean; 
 export async function userHasGoals(userId: string): Promise<boolean> {
   try {
     const { data, error } = await supabase
-      .from('user_goal')
-      .select('id')
+      .from('goal')
+      .select('uuid')
       .eq('user_uuid', userId)
       .limit(1)
 

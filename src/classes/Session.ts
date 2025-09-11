@@ -1,22 +1,28 @@
 import { Tables } from '@/src/types/database'
 import { Goal } from './Goal'
-import { Insight } from './Insight'
 
 export class Session {
   public uuid: string
   public created_at: string
   public goal_uuid: string
-  public insight_uuid: string
   public user_uuid: string
+  public summary: string
+  public mood: number
+  public motivation: number
+  public blocker: string
+  public completion: any[] // JSON array
   private _goal?: Goal
-  private _insight?: Insight
 
   constructor(data: Tables<'session'>) {
     this.uuid = data.uuid
     this.created_at = data.created_at
     this.goal_uuid = data.goal_uuid
-    this.insight_uuid = data.insight_uuid
     this.user_uuid = data.user_uuid
+    this.summary = data.summary
+    this.mood = data.mood
+    this.motivation = data.motivation
+    this.blocker = data.blocker
+    this.completion = Array.isArray(data.completion) ? data.completion : []
   }
 
   /**
@@ -34,17 +40,53 @@ export class Session {
   }
 
   /**
-   * Set the associated insight
+   * Get mood as percentage (0-100)
    */
-  setInsight(insight: Insight): void {
-    this._insight = insight
+  getMoodPercentage(): number {
+    return Math.round((this.mood / 10) * 100)
   }
 
   /**
-   * Get the associated insight
+   * Get motivation as percentage (0-100)
    */
-  getInsight(): Insight | undefined {
-    return this._insight
+  getMotivationPercentage(): number {
+    return Math.round((this.motivation / 10) * 100)
+  }
+
+  /**
+   * Get mood description
+   */
+  getMoodDescription(): string {
+    if (this.mood <= 2) return 'Very low'
+    if (this.mood <= 4) return 'Low'
+    if (this.mood <= 6) return 'Moderate'
+    if (this.mood <= 8) return 'Good'
+    return 'Excellent'
+  }
+
+  /**
+   * Get motivation description
+   */
+  getMotivationDescription(): string {
+    if (this.motivation <= 2) return 'Very low'
+    if (this.motivation <= 4) return 'Low'
+    if (this.motivation <= 6) return 'Moderate'
+    if (this.motivation <= 8) return 'High'
+    return 'Very high'
+  }
+
+  /**
+   * Check if session has blockers
+   */
+  hasBlockers(): boolean {
+    return (this.blocker && this.blocker.trim().length > 0) || false
+  }
+
+  /**
+   * Get completion items count
+   */
+  getCompletionItemsCount(): number {
+    return this.completion.length
   }
 
   /**
@@ -105,10 +147,13 @@ export class Session {
       uuid: this.uuid,
       created_at: this.created_at,
       goal_uuid: this.goal_uuid,
-      insight_uuid: this.insight_uuid,
       user_uuid: this.user_uuid,
-      goal: this._goal?.toJSON(),
-      insight: this._insight?.toJSON()
+      summary: this.summary,
+      mood: this.mood,
+      motivation: this.motivation,
+      blocker: this.blocker,
+      completion: this.completion,
+      goal: this._goal?.toJSON()
     }
   }
 
@@ -120,19 +165,15 @@ export class Session {
   }
 
   /**
-   * Create Session instance from database row with goal and insight
+   * Create Session instance from database row with goal
    */
-  static fromDatabaseWithRelations(
+  static fromDatabaseWithGoal(
     data: Tables<'session'>, 
-    goal?: Goal, 
-    insight?: Insight
+    goal?: Goal
   ): Session {
     const session = new Session(data)
     if (goal) {
       session.setGoal(goal)
-    }
-    if (insight) {
-      session.setInsight(insight)
     }
     return session
   }

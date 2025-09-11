@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { Globe, LogOut, User, RefreshCw } from 'lucide-react'
 import { useProfile } from '@/src/hooks/useProfile'
 import { useOnboardingRedirect } from '@/src/hooks/useOnboarding'
-import { useUserGoals, useSessions, goalsKeys, sessionsKeys } from '@/src/hooks/useGoals'
+import { useGoals, goalsKeys } from '@/src/hooks/useGoals'
 import { GoalTimeline, GoalInsights, GoalCalendar } from '@/src/components/dashboard'
 import MockDataGenerator from '@/src/components/dev/MockDataGenerator'
 import LoadingSpinner from '@/src/components/ui/loading-spinner'
@@ -19,9 +19,13 @@ export default function Dashboard() {
   const router = useRouter()
   const { shouldRedirect: shouldRedirectToOnboarding, isLoading: onboardingLoading } = useOnboardingRedirect()
 
-  // Fetch goals and sessions using hooks
-  const { data: goals = [], isLoading: goalsLoading } = useUserGoals(user?.id)
-  const { data: sessions = [], isLoading: sessionsLoading } = useSessions(user?.id)
+  // Fetch goals using the new hook
+  const { goals: goalsCache, isLoading: goalsLoading } = useGoals(user?.id)
+  
+  // Convert goals cache to array for UI components
+  const goals = goalsCache ? Array.from(goalsCache.values()).sort((a, b) => 
+    new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  ) : []
   
   // Track currently selected goal for insights
   const [selectedGoalIndex, setSelectedGoalIndex] = useState(0)
@@ -63,7 +67,7 @@ export default function Dashboard() {
     
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: goalsKeys.user(user.id) }),
-      queryClient.invalidateQueries({ queryKey: sessionsKeys.user(user.id) })
+      queryClient.invalidateQueries({ queryKey: goalsKeys.user(user.id) })
     ])
   }
 
@@ -113,8 +117,8 @@ export default function Dashboard() {
             goals={goals} 
             selectedGoalIndex={selectedGoalIndex}
             onGoalChange={setSelectedGoalIndex}
-            onStepClick={(step) => {
-              console.log('Step clicked:', step.text, 'Sessions:', step.getSessions().length)
+            onMilestoneClick={(milestone) => {
+              console.log('Milestone clicked:', milestone.text)
             }}
           />
         )}
@@ -123,7 +127,7 @@ export default function Dashboard() {
       {/* Goal Calendar - Progress tracking */}
       <div className="bg-background border-t border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {sessionsLoading ? (
+          {goalsLoading ? (
             <div className="flex items-center justify-center py-8">
               <div className="flex flex-col items-center gap-4">
                 <LoadingSpinner size="md" className="text-primary" />
@@ -138,7 +142,7 @@ export default function Dashboard() {
 
       {/* Goal Insights - Full Width with no margins */}
       <div className="bg-background border-t border-border">
-        {sessionsLoading ? (
+        {goalsLoading ? (
           <div className="flex items-center justify-center py-12">
             <div className="flex flex-col items-center gap-4">
               <LoadingSpinner size="md" className="text-primary" />

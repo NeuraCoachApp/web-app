@@ -3,12 +3,12 @@ import { BarChart3 } from 'lucide-react'
 import { ProgressOverviewProps } from './types'
 
 export default function ProgressOverview({ goal }: ProgressOverviewProps) {
-  const completedSteps = goal.getCompletedStepsCount()
-  const totalSteps = goal.getTotalStepsCount()
+  const completedTasks = goal.getCompletedTasksCount()
+  const totalTasks = goal.getTotalTasksCount()
   const completionPercentage = goal.getCompletionPercentage()
   
   const totalSessions = goal.getTotalSessionsCount()
-  const stepsWithSessions = goal.getActiveStepsCount()
+  const activeTasks = goal.getTasks().filter(task => !task.isCompleted).length
 
   return (
     <div className="bg-card rounded-lg border border-border p-6">
@@ -21,7 +21,7 @@ export default function ProgressOverview({ goal }: ProgressOverviewProps) {
       <div className="mb-4">
         <div className="flex justify-between text-sm mb-2">
           <span className="text-muted-foreground">Steps Completed</span>
-          <span className="text-primary font-medium">{completedSteps}/{totalSteps}</span>
+          <span className="text-primary font-medium">{completedTasks}/{totalTasks}</span>
         </div>
         <div className="w-full bg-muted rounded-full h-3">
           <div 
@@ -41,7 +41,7 @@ export default function ProgressOverview({ goal }: ProgressOverviewProps) {
           <div className="text-xs text-muted-foreground">Total Sessions</div>
         </div>
         <div>
-          <div className="text-lg font-semibold text-card-foreground">{stepsWithSessions}</div>
+          <div className="text-lg font-semibold text-card-foreground">{activeTasks}</div>
           <div className="text-xs text-muted-foreground">Active Steps</div>
         </div>
       </div>

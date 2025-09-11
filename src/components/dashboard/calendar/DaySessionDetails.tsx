@@ -60,7 +60,12 @@ export default function DaySessionDetails({ dayProgress }: DaySessionDetailsProp
 
       <div className="space-y-3">
         {sortedSessions.map((session, index) => {
-          const insight = session.getInsight()
+          // Session now contains direct properties instead of insight
+          const sessionData = {
+            summary: session.summary,
+            mood: session.mood,
+            motivation: session.motivation
+          }
           const sessionTime = new Date(session.created_at).toLocaleTimeString('en-US', {
             hour: '2-digit',
             minute: '2-digit'
@@ -75,41 +80,36 @@ export default function DaySessionDetails({ dayProgress }: DaySessionDetailsProp
                 </span>
               </div>
 
-              {insight ? (
+              {sessionData.summary ? (
                 <div className="space-y-2">
                   <p className="text-sm text-card-foreground">
-                    {insight.summary}
+                    {sessionData.summary}
                   </p>
                   
                   <div className="flex gap-4 text-xs">
                     <div className="flex items-center gap-1">
                       <TrendingUp className="w-3 h-3 text-blue-500" />
-                      <span className="text-muted-foreground">Progress:</span>
-                      <span className="font-medium text-card-foreground">{insight.progress}%</span>
+                      <span className="text-muted-foreground">Mood:</span>
+                      <span className="font-medium text-card-foreground">{sessionData.mood}/10</span>
                     </div>
                     <div className="flex items-center gap-1">
                       <Zap className="w-3 h-3 text-yellow-500" />
-                      <span className="text-muted-foreground">Effort:</span>
-                      <span className="font-medium text-card-foreground">{insight.effort_level}/10</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Brain className="w-3 h-3 text-red-500" />
-                      <span className="text-muted-foreground">Stress:</span>
-                      <span className="font-medium text-card-foreground">{insight.stress_level}/10</span>
+                      <span className="text-muted-foreground">Motivation:</span>
+                      <span className="font-medium text-card-foreground">{sessionData.motivation}/10</span>
                     </div>
                   </div>
 
-                  {/* Progress bar */}
+                  {/* Mood progress bar */}
                   <div className="w-full bg-muted rounded-full h-1.5">
                     <div 
                       className="bg-primary rounded-full h-1.5 transition-all duration-300" 
-                      style={{ width: `${insight.progress}%` }}
+                      style={{ width: `${(sessionData.mood / 10) * 100}%` }}
                     />
                   </div>
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  Session recorded without insights
+                  Session recorded without data
                 </p>
               )}
             </div>

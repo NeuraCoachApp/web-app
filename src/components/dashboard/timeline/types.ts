@@ -1,17 +1,19 @@
 import { Goal } from '@/src/classes/Goal'
-import { Step } from '@/src/classes/Step'
+import { Milestone } from '@/src/classes/Milestone'
+import { Task } from '@/src/classes/Task'
 
 export interface TimelineProps {
   goals: Goal[]
   selectedGoalIndex?: number
   onGoalChange?: (index: number) => void
-  onStepClick?: (step: Step) => void
+  onMilestoneClick?: (milestone: Milestone) => void
 }
 
-export interface StepSessionModalProps {
+export interface MilestoneTasksModalProps {
   isOpen: boolean
   onClose: () => void
-  step: Step | null
+  milestone: Milestone | null
+  goal: Goal | null
 }
 
 export interface GoalSwitcherProps {
@@ -24,15 +26,15 @@ export interface GoalSwitcherProps {
 
 export interface GoalSquareProps {
   goal: Goal
-  allStepsCompleted: boolean
+  allMilestonesCompleted: boolean
 }
 
-export interface StepSquareProps {
-  step: Step
-  stepIndex: number
-  currentStepIndex: number
-  allStepsCompleted: boolean
-  onStepClick: (step: Step) => void
+export interface MilestoneSquareProps {
+  milestone: Milestone
+  milestoneIndex: number
+  currentMilestoneIndex: number
+  allMilestonesCompleted: boolean
+  onMilestoneClick: (milestone: Milestone) => void
 }
 
 export interface TimelineLayoutProps {

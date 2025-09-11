@@ -17,91 +17,63 @@ export type Database = {
       goal: {
         Row: {
           created_at: string
-          end_at: string
+          init_end_at: string
           text: string
+          user_uuid: string
           uuid: string
         }
         Insert: {
           created_at?: string
-          end_at?: string
+          init_end_at?: string
           text?: string
+          user_uuid?: string
           uuid?: string
         }
         Update: {
           created_at?: string
-          end_at?: string
+          init_end_at?: string
           text?: string
+          user_uuid?: string
           uuid?: string
-        }
-        Relationships: []
-      }
-      goal_steps: {
-        Row: {
-          goal_uuid: string
-          id: number
-          step_uuid: string
-        }
-        Insert: {
-          goal_uuid?: string
-          id?: number
-          step_uuid?: string
-        }
-        Update: {
-          goal_uuid?: string
-          id?: number
-          step_uuid?: string
         }
         Relationships: [
           {
-            foreignKeyName: "goal_steps_goal_uuid_fkey"
-            columns: ["goal_uuid"]
+            foreignKeyName: "goal_user_uuid_fkey"
+            columns: ["user_uuid"]
             isOneToOne: false
-            referencedRelation: "goal"
-            referencedColumns: ["uuid"]
-          },
-          {
-            foreignKeyName: "goal_steps_step_uuid_fkey"
-            columns: ["step_uuid"]
-            isOneToOne: false
-            referencedRelation: "step"
+            referencedRelation: "profile"
             referencedColumns: ["uuid"]
           },
         ]
       }
-      insight: {
+      milestone: {
         Row: {
-          created_at: string
-          effort_level: number
-          progress: number
-          step_uuid: string
-          stress_level: number
-          summary: string
+          end_at: string
+          goal_uuid: string
+          start_at: string
+          text: string
           uuid: string
         }
         Insert: {
-          created_at?: string
-          effort_level?: number
-          progress?: number
-          step_uuid?: string
-          stress_level?: number
-          summary?: string
+          end_at?: string
+          goal_uuid?: string
+          start_at?: string
+          text?: string
           uuid?: string
         }
         Update: {
-          created_at?: string
-          effort_level?: number
-          progress?: number
-          step_uuid?: string
-          stress_level?: number
-          summary?: string
+          end_at?: string
+          goal_uuid?: string
+          start_at?: string
+          text?: string
           uuid?: string
         }
         Relationships: [
           {
-            foreignKeyName: "insight_step_uuid_fkey"
-            columns: ["step_uuid"]
+            foreignKeyName: "milestone_goal_uuid_fkey"
+            columns: ["goal_uuid"]
             isOneToOne: false
-            referencedRelation: "step"
+            referencedRelation: "goal"
             referencedColumns: ["uuid"]
           },
         ]
@@ -135,23 +107,35 @@ export type Database = {
       }
       session: {
         Row: {
+          blocker: string
+          completion: Json[]
           created_at: string
           goal_uuid: string
-          insight_uuid: string
+          mood: number
+          motivation: number
+          summary: string
           user_uuid: string
           uuid: string
         }
         Insert: {
+          blocker?: string
+          completion: Json[]
           created_at?: string
           goal_uuid?: string
-          insight_uuid?: string
+          mood?: number
+          motivation?: number
+          summary?: string
           user_uuid?: string
           uuid?: string
         }
         Update: {
+          blocker?: string
+          completion?: Json[]
           created_at?: string
           goal_uuid?: string
-          insight_uuid?: string
+          mood?: number
+          motivation?: number
+          summary?: string
           user_uuid?: string
           uuid?: string
         }
@@ -164,13 +148,6 @@ export type Database = {
             referencedColumns: ["uuid"]
           },
           {
-            foreignKeyName: "session_insight_uuid_fkey"
-            columns: ["insight_uuid"]
-            isOneToOne: false
-            referencedRelation: "insight"
-            referencedColumns: ["uuid"]
-          },
-          {
             foreignKeyName: "session_user_uuid_fkey"
             columns: ["user_uuid"]
             isOneToOne: false
@@ -179,73 +156,50 @@ export type Database = {
           },
         ]
       }
-      step: {
+      task: {
         Row: {
           created_at: string
           end_at: string
+          goal_uuid: string
           isCompleted: boolean
-          next_step: string | null
+          milestone_uuid: string
+          start_at: string
           text: string
           uuid: string
         }
         Insert: {
           created_at?: string
           end_at?: string
+          goal_uuid?: string
           isCompleted?: boolean
-          next_step?: string | null
+          milestone_uuid?: string
+          start_at?: string
           text?: string
           uuid?: string
         }
         Update: {
           created_at?: string
           end_at?: string
+          goal_uuid?: string
           isCompleted?: boolean
-          next_step?: string | null
+          milestone_uuid?: string
+          start_at?: string
           text?: string
           uuid?: string
         }
         Relationships: [
           {
-            foreignKeyName: "step_next_step_fkey"
-            columns: ["next_step"]
-            isOneToOne: false
-            referencedRelation: "step"
-            referencedColumns: ["uuid"]
-          },
-        ]
-      }
-      user_goal: {
-        Row: {
-          created_at: string
-          goal_uuid: string
-          id: number
-          user_uuid: string
-        }
-        Insert: {
-          created_at?: string
-          goal_uuid?: string
-          id?: number
-          user_uuid?: string
-        }
-        Update: {
-          created_at?: string
-          goal_uuid?: string
-          id?: number
-          user_uuid?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "user_goal_goal_uuid_fkey"
+            foreignKeyName: "step_goal_uuid_fkey"
             columns: ["goal_uuid"]
             isOneToOne: false
             referencedRelation: "goal"
             referencedColumns: ["uuid"]
           },
           {
-            foreignKeyName: "user_goal_user_uuid_fkey"
-            columns: ["user_uuid"]
+            foreignKeyName: "step_milestone_uuid_fkey"
+            columns: ["milestone_uuid"]
             isOneToOne: false
-            referencedRelation: "profile"
+            referencedRelation: "milestone"
             referencedColumns: ["uuid"]
           },
         ]
@@ -255,18 +209,6 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      add_steps_to_goal: {
-        Args: { p_goal_uuid: string; p_steps: Json }
-        Returns: Json
-      }
-      create_goal_with_steps: {
-        Args: {
-          p_goal_text: string
-          p_steps: Json
-          p_user_uuid: string
-        }
-        Returns: Json
-      }
       create_profile: {
         Args: { p_user_uuid: string }
         Returns: {
@@ -277,27 +219,23 @@ export type Database = {
           user_uuid: string
         }[]
       }
-      create_session_with_insight: {
-        Args: {
-          p_effort_level: number
-          p_goal_uuid: string
-          p_progress: number
-          p_step_uuid: string
-          p_stress_level: number
-          p_summary: string
-          p_user_uuid: string
-        }
+      get_batch_goal_object: {
+        Args: { p_user_uuid: string }
         Returns: Json
       }
-      get_goal_daily_metrics: {
-        Args: { p_days_back?: number; p_goal_uuid: string }
-        Returns: Json
-      }
-      get_goal_progress_summary: {
+      get_batch_milestones: {
         Args: { p_goal_uuid: string }
         Returns: Json
       }
-      get_goal_with_details: {
+      get_batch_sessions: {
+        Args: { p_goal_uuid: string }
+        Returns: Json
+      }
+      get_batch_tasks: {
+        Args: { p_goal_uuid: string }
+        Returns: Json
+      }
+      get_goal: {
         Args: { p_goal_uuid: string }
         Returns: Json
       }
@@ -312,14 +250,6 @@ export type Database = {
           uuid: string
         }
       }
-      get_user_goals_with_details: {
-        Args: { p_user_uuid: string }
-        Returns: Json
-      }
-      get_user_sessions: {
-        Args: { p_user_uuid: string }
-        Returns: Json
-      }
       update_profile: {
         Args: {
           p_first_name?: string
@@ -333,10 +263,6 @@ export type Database = {
           updated_at: string
           user_uuid: string
         }[]
-      }
-      update_step_completion: {
-        Args: { p_is_completed: boolean; p_step_uuid: string }
-        Returns: Json
       }
     }
     Enums: {

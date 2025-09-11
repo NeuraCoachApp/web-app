@@ -1,5 +1,5 @@
 // Export all classes for easy importing
 export { Goal } from './Goal'
-export { Step } from './Step'
-export { Insight } from './Insight'
+export { Milestone } from './Milestone'
+export { Task } from './Task'
 export { Session } from './Session'

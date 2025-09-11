@@ -16,13 +16,11 @@ export function calculateDayProgress(goal: Goal, date: Date): DayProgress {
   
   // Get all sessions from this specific date across all steps
   const sessionsFromDay: Session[] = []
-  goal.getSteps().forEach(step => {
-    step.getSessions().forEach(session => {
-      const sessionDate = new Date(session.created_at).toISOString().split('T')[0]
-      if (sessionDate === dateStr) {
-        sessionsFromDay.push(session)
-      }
-    })
+  goal.getSessions().forEach(session => {
+    const sessionDate = new Date(session.created_at).toISOString().split('T')[0]
+    if (sessionDate === dateStr) {
+      sessionsFromDay.push(session)
+    }
   })
   
   // If no sessions at all, it's a red day (none)
@@ -37,48 +35,43 @@ export function calculateDayProgress(goal: Goal, date: Date): DayProgress {
     }
   }
   
-  // Get steps that were active/assigned for this day (had sessions on this day or are currently active)
-  const stepsActiveToday = goal.getSteps().filter(step => {
+  // Get tasks that were active/assigned for this day
+  const tasksActiveToday = goal.getTasks().filter(task => {
     // Check for null values before creating dates
-    if (!step.created_at || !step.end_at) return false
+    if (!task.start_at || !task.end_at) return false
     
-    const stepStartDate = new Date(step.created_at)
-    const stepEndDate = new Date(step.end_at)
+    const taskStartDate = new Date(task.start_at)
+    const taskEndDate = new Date(task.end_at)
     const currentDate = new Date(date)
     
-    // Step is active if the date falls within its timeframe
-    return currentDate >= stepStartDate && currentDate <= stepEndDate
+    // Task is active if the date falls within its timeframe
+    return currentDate >= taskStartDate && currentDate <= taskEndDate
   })
   
-  // Get steps that had any progress (sessions) on this specific date
-  const stepsWorkedOnToday = stepsActiveToday.filter(step => 
-    step.getSessions().some(session => {
-      const sessionDate = new Date(session.created_at).toISOString().split('T')[0]
-      return sessionDate === dateStr
-    })
-  )
+  // Count sessions from this day (indicates work was done)
+  const sessionsToday = sessionsFromDay.length
   
-  const totalSteps = stepsActiveToday.length
-  const workedSteps = stepsWorkedOnToday.length
+  const totalTasks = tasksActiveToday.length
+  const hasWork = sessionsToday > 0
   
   let status: 'none' | 'partial' | 'complete' = 'none'
   
-  if (workedSteps === 0) {
-    // No work done on any assigned steps = red
+  if (!hasWork) {
+    // No sessions logged = red
     status = 'none'
-  } else if (workedSteps === totalSteps) {
-    // Made progress on ALL assigned steps = green
+  } else if (totalTasks > 0 && sessionsToday >= totalTasks) {
+    // High session activity relative to active tasks = green
     status = 'complete'
   } else {
-    // Made progress on some but not all assigned steps = yellow
+    // Some work done = yellow
     status = 'partial'
   }
   
   return {
     date,
     dayName: getDayName(date),
-    totalSteps,
-    completedSteps: workedSteps,
+    totalSteps: totalTasks,
+    completedSteps: hasWork ? 1 : 0,
     status,
     sessions: sessionsFromDay
   }

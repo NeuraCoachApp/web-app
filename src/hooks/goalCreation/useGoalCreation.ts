@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useState, useCallback } from 'react'
 import { useAuth } from '@/src/contexts/AuthContext'
 import { useProfile } from '../useProfile'
-import { useCreateGoal, useUserGoals, useCreateGoalWithSteps } from '../useGoals'
+import { useGoals } from '../useGoals'
 import { Tables } from '@/src/types/database'
 import { Goal } from '@/src/classes/Goal'
 import { generateGoalSteps, validateOpenAIConfiguration, GeneratedStep } from '@/src/lib/openai-steps'
@@ -93,14 +93,14 @@ export const goalCreationKeys = {
 /**
  * Check user's goal creation status based on existing goals data
  */
-function checkGoalCreationStatus(userGoals: Goal[] | null): GoalCreationStatus {
+function checkGoalCreationStatus(goalsCache: Map<string, Goal> | null): GoalCreationStatus {
   console.log('🎯 [Goal Creation] Checking goal creation status:', { 
-    hasData: !!userGoals, 
-    goalCount: userGoals?.length || 0 
+    hasData: !!goalsCache, 
+    goalCount: goalsCache?.size || 0 
   })
   
   // If no goals, needs goal creation
-  if (!userGoals || userGoals.length === 0) {
+  if (!goalsCache || goalsCache.size === 0) {
     console.log('🎯 [Goal Creation] User needs goal creation')
     return {
       needsGoalCreation: true,
@@ -118,10 +118,10 @@ function checkGoalCreationStatus(userGoals: Goal[] | null): GoalCreationStatus {
 
 /**
  * Hook to fetch and cache goal creation status
- * This reuses the existing useUserGoals hook to avoid duplication
+ * This reuses the existing useGoals hook to avoid duplication
  */
 export function useGoalCreationStatus(userId?: string) {
-  const { data: userGoals, isLoading, error } = useUserGoals(userId)
+  const { goals, isLoading, error } = useGoals(userId)
   
   return useQuery({
     queryKey: goalCreationKeys.status(userId || ''),
@@ -142,7 +142,7 @@ export function useGoalCreationStatus(userId?: string) {
         }
       }
       
-      return checkGoalCreationStatus(userGoals ?? null)
+      return checkGoalCreationStatus(goals || null)
     },
     enabled: !!userId && !isLoading, // Wait for user goals to load
     staleTime: 2 * 60 * 1000, // 2 minutes
@@ -185,8 +185,7 @@ export function useGoalCreationFlow() {
   const { user } = useAuth()
   const { data: profile } = useProfile(user?.id)
   const { data: goalCreationStatus } = useGoalCreationStatus(user?.id)
-  const createGoalMutation = useCreateGoal()
-  const createGoalWithStepsMutation = useCreateGoalWithSteps()
+  const { createGoal } = useGoals(user?.id)
 
   // State management
   const [state, setState] = useState<GoalCreationState>({
@@ -262,44 +261,22 @@ export function useGoalCreationFlow() {
     if (!user) return
 
     console.log('🎯 [Goal Creation] Starting background goal creation process')
-    setState(prev => ({ ...prev, backgroundProcessStatus: 'generating-steps' }))
+    setState(prev => ({ ...prev, backgroundProcessStatus: 'creating-goal' }))
     
     try {
-      // Generate steps using OpenAI in background
-      const steps = await generateSteps(goalText, reason)
-      
-      setState(prev => ({ ...prev, backgroundProcessStatus: 'creating-goal' }))
-      
-      if (steps && steps.length > 0) {
-        console.log('✅ [Goal Creation] Generated steps, creating goal with steps')
-        // Save the goal with generated steps
-        await createGoalWithStepsMutation.mutateAsync({ 
-          goalText: goalText,
-          steps: steps
-        })
-        console.log('✅ [Goal Creation] Successfully created goal with steps')
-      } else {
-        console.log('⚠️ [Goal Creation] No steps generated, creating goal without steps')
-        // Fallback to creating goal without steps if step generation failed
-        await createGoalMutation.mutateAsync({ goalText: goalText })
-        console.log('✅ [Goal Creation] Successfully created goal without steps')
-      }
+      // Create goal directly (we'll add milestone/task generation later if needed)
+      createGoal({ 
+        goalText: goalText,
+        initEndAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString() // 90 days from now
+      })
+      console.log('✅ [Goal Creation] Successfully created goal')
       
       setState(prev => ({ ...prev, backgroundProcessStatus: 'completed' }))
     } catch (error) {
       console.error('❌ [Goal Creation] Background goal creation failed:', error)
-      
-      // Final fallback - try to create goal without steps
-      try {
-        await createGoalMutation.mutateAsync({ goalText: goalText })
-        console.log('✅ [Goal Creation] Fallback goal creation succeeded')
-        setState(prev => ({ ...prev, backgroundProcessStatus: 'completed' }))
-      } catch (fallbackError) {
-        console.error('❌ [Goal Creation] Even fallback goal creation failed:', fallbackError)
-        setState(prev => ({ ...prev, backgroundProcessStatus: 'failed' }))
-      }
+      setState(prev => ({ ...prev, backgroundProcessStatus: 'failed' }))
     }
-  }, [user, generateSteps, createGoalWithStepsMutation, createGoalMutation])
+  }, [user, createGoal])
 
   // Handle next step logic for goal creation flow
   const handleNext = useCallback(async () => {

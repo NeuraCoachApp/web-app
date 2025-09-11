@@ -4,19 +4,7 @@ import { supabase } from '@/src/lib/supabase'
 import { onboardingKeys } from './useOnboarding'
 import { goalCreationKeys } from './goalCreation/useGoalCreation'
 import { Tables } from '@/src/types/database'
-import { Goal } from '@/src/classes/Goal'
-import { Session } from '@/src/classes/Session'
-import { fetchUserGoalsWithDetails, fetchUserSessions, createSessionWithInsight, createGoalWithSteps, addStepsToGoal, updateStepCompletion } from '@/src/lib/queries'
-import { getMockGoals, getMockSessions } from '@/src/lib/mock-data'
-import { Insight } from '../classes'
-
-type UserGoal = Tables<'user_goal'>
-
-export interface SessionWithGoalAndInsight {
-  goal: Tables<'goal'>
-  insight: Tables<'insight'>
-  created_at: string
-}
+import { Goal, Milestone, Task, Session } from '@/src/classes'
 
 // Query keys for React Query
 export const goalsKeys = {
@@ -24,242 +12,304 @@ export const goalsKeys = {
   user: (userId: string) => [...goalsKeys.all, 'user', userId] as const,
 }
 
-export const sessionsKeys = {
-  all: ['sessions'] as const,
-  user: (userId: string) => [...sessionsKeys.all, 'user', userId] as const,
+// Interface for the batch goal object response
+export interface BatchGoalObjectResponse {
+  goal: Tables<'goal'>
+  milestone: Tables<'milestone'>[]
+  session: Tables<'session'>[]
+  task: Tables<'task'>[]
 }
 
+// Type for the goals cache - maps goal_uuid to Goal instance
+export type GoalsCache = Map<string, Goal>
+
 /**
- * Check if user has goals assigned
+ * Fetch all goals for a user using the new get_batch_goal_object RPC function
  */
-async function getUserGoals(userUuid: string): Promise<{ data: UserGoal[] | null; error: any }> {
+async function fetchUserGoals(userId: string): Promise<GoalsCache> {
   try {
-    const { data, error } = await supabase
-      .from('user_goal')
-      .select('*')
-      .eq('user_uuid', userUuid)
-    
+    console.log('🎯 [fetchUserGoals] Fetching goals for user:', userId)
+
+    const { data, error } = await supabase.rpc('get_batch_goal_object', {
+      p_user_uuid: userId
+    })
+
     if (error) {
-      console.warn('Error fetching user goals:', error)
-      return { data: null, error }
+      console.error('❌ [fetchUserGoals] RPC error:', error)
+      throw error
     }
-    
-    return { data, error: null }
+
+    if (!data || !Array.isArray(data)) {
+      console.log('📭 [fetchUserGoals] No goals found for user')
+      return new Map()
+    }
+
+    console.log('📊 [fetchUserGoals] Raw RPC response:', { dataLength: data.length })
+
+    const goalsCache = new Map<string, Goal>()
+
+    // Process each goal object from the batch response
+    for (const item of data as any[]) {
+      // Type guard: check that the object has the required fields
+      if (!item || typeof item !== 'object' || !item.goal || !item.milestone || !item.session || !item.task) {
+        console.warn('⚠️ [fetchUserGoals] Invalid goal object structure, skipping:', item)
+        continue
+      }
+
+      const goalObject = item as BatchGoalObjectResponse
+      const { goal: goalData, milestone: milestonesData, session: sessionsData, task: tasksData } = goalObject
+
+      if (!goalData || !goalData.uuid) {
+        console.warn('⚠️ [fetchUserGoals] Invalid goal data, skipping:', goalData)
+        continue
+      }
+
+      // Create Goal instance
+      const goal = new Goal(goalData)
+
+      // Add milestones
+      if (milestonesData && Array.isArray(milestonesData)) {
+        milestonesData.forEach(milestoneData => {
+          try {
+            const milestone = new Milestone(milestoneData)
+            goal.addMilestone(milestone)
+          } catch (error) {
+            console.warn('⚠️ [fetchUserGoals] Error creating milestone:', error, milestoneData)
+          }
+        })
+      }
+
+      // Add tasks
+      if (tasksData && Array.isArray(tasksData)) {
+        tasksData.forEach(taskData => {
+          try {
+            const task = new Task(taskData)
+            goal.addTask(task)
+          } catch (error) {
+            console.warn('⚠️ [fetchUserGoals] Error creating task:', error, taskData)
+          }
+        })
+      }
+
+      // Add sessions
+      if (sessionsData && Array.isArray(sessionsData)) {
+        sessionsData.forEach(sessionData => {
+          try {
+            const session = new Session(sessionData)
+            session.setGoal(goal) // Set bidirectional relationship
+            goal.addSession(session)
+          } catch (error) {
+            console.warn('⚠️ [fetchUserGoals] Error creating session:', error, sessionData)
+          }
+        })
+      }
+
+      // Add to cache
+      goalsCache.set(goalData.uuid, goal)
+
+      console.log(`✅ [fetchUserGoals] Processed goal "${goalData.text}" with ${goal.getTotalMilestonesCount()} milestones, ${goal.getTotalTasksCount()} tasks, ${goal.getTotalSessionsCount()} sessions`)
+    }
+
+    console.log(`🎉 [fetchUserGoals] Successfully cached ${goalsCache.size} goals for user ${userId}`)
+    return goalsCache
+
   } catch (error) {
-    console.warn('Error in getUserGoals:', error)
-    return { data: null, error }
+    console.error('❌ [fetchUserGoals] Error fetching user goals:', error)
+    throw error
   }
 }
 
 /**
- * Create a goal entry
+ * Create a new goal
  */
-async function createGoal(goalText: string, endAt?: string): Promise<{ data: Goal | null; error: any }> {
+async function createGoal(
+  userId: string, 
+  goalText: string, 
+  initEndAt?: string
+): Promise<Goal> {
   try {
+    console.log('🎯 [createGoal] Creating goal:', { userId, goalText, initEndAt })
+
     const { data, error } = await supabase
       .from('goal')
       .insert({
         text: goalText,
-        end_at: endAt || new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString() // Default to 90 days from now
+        init_end_at: initEndAt || new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(), // Default to 90 days from now
+        user_uuid: userId
       })
       .select()
       .single()
-    
+
     if (error || !data) {
-      return { data: null, error }
+      console.error('❌ [createGoal] Error creating goal:', error)
+      throw error || new Error('Failed to create goal')
     }
-    
-    // Convert to Goal class instance
+
     const goal = new Goal(data)
-    return { data: goal, error: null }
+    console.log('✅ [createGoal] Successfully created goal:', goal.uuid)
+    return goal
+
   } catch (error) {
-    console.warn('Error creating goal:', error)
-    return { data: null, error }
+    console.error('❌ [createGoal] Error in createGoal:', error)
+    throw error
   }
 }
 
 /**
- * Assign a goal to a user
+ * Create a new milestone for a goal
  */
-async function assignGoalToUser(userUuid: string, goalUuid: string): Promise<{ data: UserGoal | null; error: any }> {
+async function createMilestone(
+  goalUuid: string,
+  milestoneData: {
+    text: string
+    start_at: string
+    end_at: string
+  }
+): Promise<Milestone> {
   try {
+    console.log('🎯 [createMilestone] Creating milestone:', { goalUuid, milestoneData })
+
     const { data, error } = await supabase
-      .from('user_goal')
+      .from('milestone')
       .insert({
-        user_uuid: userUuid,
+        text: milestoneData.text,
+        start_at: milestoneData.start_at,
+        end_at: milestoneData.end_at,
         goal_uuid: goalUuid
       })
       .select()
       .single()
-    
-    return { data, error }
+
+    if (error || !data) {
+      console.error('❌ [createMilestone] Error creating milestone:', error)
+      throw error || new Error('Failed to create milestone')
+    }
+
+    const milestone = new Milestone(data)
+    console.log('✅ [createMilestone] Successfully created milestone:', milestone.uuid)
+    return milestone
+
   } catch (error) {
-    console.warn('Error assigning goal to user:', error)
-    return { data: null, error }
+    console.error('❌ [createMilestone] Error in createMilestone:', error)
+    throw error
   }
 }
 
 /**
- * Create a goal and assign it to a user
+ * Create a new task for a goal
  */
-async function createAndAssignGoal(userUuid: string, goalText: string, endAt?: string): Promise<{ data: { goal: Goal; userGoal: UserGoal } | null; error: any }> {
-  // First create the goal
-  const { data: goal, error: goalError } = await createGoal(goalText, endAt)
-  
-  if (goalError || !goal) {
-    return { data: null, error: goalError }
+async function createTask(
+  goalUuid: string,
+  milestoneUuid: string,
+  taskData: {
+    text: string
+    start_at: string
+    end_at: string
   }
-  
-  // Then assign it to the user
-  const { data: userGoal, error: assignError } = await assignGoalToUser(userUuid, goal.uuid)
-  
-  if (assignError || !userGoal) {
-    return { data: null, error: assignError }
-  }
-  
-  return { data: { goal, userGoal }, error: null }
-}
-
-/**
- * Fetch all user sessions with their related goal and insight data
- */
-async function getUserSessions(userUuid: string): Promise<{ data: SessionWithGoalAndInsight[] | null; error: any }> {
+): Promise<Task> {
   try {
-    console.log('📊 [getUserSessions] Starting fetch for user:', userUuid)
-    
-    const { data: sessions, error: sessionsError } = await supabase
-      .from('session')
-      .select(`
-        created_at,
-        goal:goal_uuid (
-          uuid,
-          text,
-          created_at,
-          end_at
-        ),
-        insight:insight_uuid (
-          uuid,
-          summary,
-          progress,
-          effort_level,
-          stress_level,
-          created_at
-        )
-      `)
-      .eq('user_uuid', userUuid)
-      .order('created_at', { ascending: true })
-    
-    console.log('📊 [getUserSessions] Sessions query result:', { sessions, sessionsError })
-    console.log('📊 [getUserSessions] Raw sessions data:', JSON.stringify(sessions, null, 2))
-    
-    if (sessionsError) {
-      console.warn('❌ Error fetching user sessions:', sessionsError)
-      return { data: null, error: sessionsError }
+    console.log('📋 [createTask] Creating task:', { goalUuid, milestoneUuid, taskData })
+
+    const { data, error } = await supabase
+      .from('task')
+      .insert({
+        text: taskData.text,
+        start_at: taskData.start_at,
+        end_at: taskData.end_at,
+        goal_uuid: goalUuid,
+        milestone_uuid: milestoneUuid,
+        isCompleted: false
+      })
+      .select()
+      .single()
+
+    if (error || !data) {
+      console.error('❌ [createTask] Error creating task:', error)
+      throw error || new Error('Failed to create task')
     }
 
-    if (!sessions || sessions.length === 0) {
-      console.log('📭 No sessions found for user')
-      
-      // Debug: Try a simple query to see if sessions exist at all
-      const { data: debugSessions, error: debugError } = await supabase
-        .from('session')
-        .select('*')
-        .eq('user_uuid', userUuid)
-      
-      console.log('🔍 [getUserSessions] Debug simple query:', { debugSessions, debugError })
-      
-      return { data: [], error: null }
-    }
+    const task = new Task(data)
+    console.log('✅ [createTask] Successfully created task:', task.uuid)
+    return task
 
-    // Filter and structure the data
-    const structuredSessions: SessionWithGoalAndInsight[] = sessions
-      .filter(session => session.goal && session.insight)
-      .map(session => ({
-        goal: session.goal as Goal,
-        insight: session.insight as Insight,
-        created_at: session.created_at
-      }))
-    
-    console.log(`✅ [getUserSessions] Successfully processed ${structuredSessions.length} sessions`)
-    return { data: structuredSessions, error: null }
   } catch (error) {
-    console.warn('❌ Error in getUserSessions:', error)
-    return { data: null, error }
+    console.error('❌ [createTask] Error in createTask:', error)
+    throw error
   }
 }
 
 /**
- * Hook to fetch and cache user goals data using Goal classes
+ * Update task completion status
  */
-export function useUserGoals(userId?: string) {
-  return useQuery({
-    queryKey: goalsKeys.user(userId || ''),
-    queryFn: async (): Promise<Goal[]> => {
-      if (!userId) {
-        return []
-      }
-      
-      const goals = await fetchUserGoalsWithDetails(userId)
-      
-      console.log('✅ [useUserGoals] Successfully fetched goals:', { userId, goalCount: goals.length })
-      return goals
-    },
-    enabled: !!userId,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes
-  })
+async function updateTaskCompletion(
+  taskUuid: string,
+  isCompleted: boolean
+): Promise<Task> {
+  try {
+    console.log('✅ [updateTaskCompletion] Updating task:', { taskUuid, isCompleted })
+
+    const { data, error } = await supabase
+      .from('task')
+      .update({ isCompleted })
+      .eq('uuid', taskUuid)
+      .select()
+      .single()
+
+    if (error || !data) {
+      console.error('❌ [updateTaskCompletion] Error updating task:', error)
+      throw error || new Error('Failed to update task completion')
+    }
+
+    const task = new Task(data)
+    console.log('✅ [updateTaskCompletion] Successfully updated task:', task.uuid)
+    return task
+
+  } catch (error) {
+    console.error('❌ [updateTaskCompletion] Error in updateTaskCompletion:', error)
+    throw error
+  }
 }
 
 /**
- * Hook to fetch user's sessions using Session classes
+ * Comprehensive hook for managing all goal-related functionality
+ * Single source of truth using get_batch_goal_object RPC function
  */
-export function useSessions(userId?: string) {
-  return useQuery({
-    queryKey: sessionsKeys.user(userId || ''),
-    queryFn: async (): Promise<Session[]> => {
-      if (!userId) {
-        console.log('📊 [useSessions] No user ID provided')
-        return []
-      }
-      
-      console.log('📊 [useSessions] Fetching real sessions for user (RLS enforced):', userId)
-      const sessions = await fetchUserSessions(userId)
-      
-      console.log('✅ [useSessions] Successfully fetched sessions:', { userId, sessionCount: sessions.length })
-      return sessions
-    },
-    enabled: !!userId,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes
-  })
-}
-
-/**
- * Hook to create and assign a goal to a user with cache invalidation
- */
-export function useCreateGoal() {
+export function useGoals(userId?: string) {
   const queryClient = useQueryClient()
   const { user } = useAuth()
 
-  return useMutation({
-    mutationFn: async ({ goalText, endAt }: { goalText: string; endAt?: string }) => {
+  // Main query for fetching goals data
+  const goalsQuery = useQuery({
+    queryKey: goalsKeys.user(userId || ''),
+    queryFn: async (): Promise<GoalsCache> => {
+      if (!userId) {
+        console.log('🎯 [useGoals] No user ID provided')
+        return new Map()
+      }
+      
+      return await fetchUserGoals(userId)
+    },
+    enabled: !!userId,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes
+  })
+
+  // Mutation for creating goals
+  const createGoalMutation = useMutation({
+    mutationFn: async ({ 
+      goalText, 
+      initEndAt 
+    }: { 
+      goalText: string; 
+      initEndAt?: string 
+    }) => {
       if (!user) throw new Error('No user found')
-      const { data, error } = await createAndAssignGoal(user.id, goalText, endAt)
-      if (error) throw error
-      return data
+      return await createGoal(user.id, goalText, initEndAt)
     },
     onSuccess: () => {
       if (user) {
-        // Invalidate user goals to refetch fresh data
         queryClient.invalidateQueries({ queryKey: goalsKeys.user(user.id) })
-        
-        // Invalidate sessions data
-        queryClient.invalidateQueries({ queryKey: sessionsKeys.user(user.id) })
-        
-        // Also invalidate onboarding status since it depends on goals
         queryClient.invalidateQueries({ queryKey: onboardingKeys.status(user.id) })
-        
-        // Invalidate goal creation status since user now has goals
         queryClient.invalidateQueries({ queryKey: goalCreationKeys.status(user.id) })
       }
     },
@@ -267,113 +317,104 @@ export function useCreateGoal() {
       console.error('Failed to create goal:', error)
     },
   })
-}
 
-/**
- * Hook to create a goal with OpenAI-generated steps
- */
-export function useCreateGoalWithSteps() {
-  const queryClient = useQueryClient()
-  const { user } = useAuth()
-
-  return useMutation({
+  // Mutation for creating milestones
+  const createMilestoneMutation = useMutation({
     mutationFn: async ({ 
-      goalText, 
-      steps
+      goalUuid,
+      milestoneData
     }: { 
-      goalText: string; 
-      steps: any[]
+      goalUuid: string;
+      milestoneData: {
+        text: string
+        start_at: string
+        end_at: string
+      }
     }) => {
-      if (!user) throw new Error('No user found')
-      const goal = await createGoalWithSteps(user.id, goalText, steps)
-      if (!goal) throw new Error('Failed to create goal with steps')
-      return goal
+      return await createMilestone(goalUuid, milestoneData)
     },
     onSuccess: () => {
       if (user) {
-        // Invalidate user goals to refetch fresh data
         queryClient.invalidateQueries({ queryKey: goalsKeys.user(user.id) })
-        
-        // Invalidate sessions data
-        queryClient.invalidateQueries({ queryKey: sessionsKeys.user(user.id) })
-        
-        // Also invalidate onboarding status since it depends on goals
-        queryClient.invalidateQueries({ queryKey: onboardingKeys.status(user.id) })
-        
-        // Invalidate goal creation status since user now has goals
-        queryClient.invalidateQueries({ queryKey: goalCreationKeys.status(user.id) })
       }
     },
     onError: (error) => {
-      console.error('Failed to create goal with steps:', error)
+      console.error('Failed to create milestone:', error)
     },
   })
-}
 
-/**
- * Hook to add steps to an existing goal
- */
-export function useAddStepsToGoal() {
-  const queryClient = useQueryClient()
-  const { user } = useAuth()
-
-  return useMutation({
+  // Mutation for creating tasks
+  const createTaskMutation = useMutation({
     mutationFn: async ({ 
-      goalUuid, 
-      steps 
+      goalUuid,
+      milestoneUuid,
+      taskData
     }: { 
-      goalUuid: string; 
-      steps: any[] 
+      goalUuid: string;
+      milestoneUuid: string;
+      taskData: {
+        text: string
+        start_at: string
+        end_at: string
+      }
     }) => {
-      const goal = await addStepsToGoal(goalUuid, steps)
-      if (!goal) throw new Error('Failed to add steps to goal')
-      return goal
+      return await createTask(goalUuid, milestoneUuid, taskData)
     },
     onSuccess: () => {
       if (user) {
-        // Invalidate user goals to refetch fresh data
         queryClient.invalidateQueries({ queryKey: goalsKeys.user(user.id) })
-        
-        // Invalidate sessions data
-        queryClient.invalidateQueries({ queryKey: sessionsKeys.user(user.id) })
       }
     },
     onError: (error) => {
-      console.error('Failed to add steps to goal:', error)
+      console.error('Failed to create task:', error)
     },
   })
-}
 
-/**
- * Hook to update step completion status
- */
-export function useUpdateStepCompletion() {
-  const queryClient = useQueryClient()
-  const { user } = useAuth()
-
-  return useMutation({
+  // Mutation for updating task completion
+  const updateTaskCompletionMutation = useMutation({
     mutationFn: async ({ 
-      stepUuid, 
-      isCompleted 
+      taskUuid,
+      isCompleted
     }: { 
-      stepUuid: string; 
-      isCompleted: boolean 
+      taskUuid: string;
+      isCompleted: boolean
     }) => {
-      const goal = await updateStepCompletion(stepUuid, isCompleted)
-      if (!goal) throw new Error('Failed to update step completion')
-      return goal
+      return await updateTaskCompletion(taskUuid, isCompleted)
     },
     onSuccess: () => {
       if (user) {
-        // Invalidate user goals to refetch fresh data
         queryClient.invalidateQueries({ queryKey: goalsKeys.user(user.id) })
-        
-        // Invalidate sessions data
-        queryClient.invalidateQueries({ queryKey: sessionsKeys.user(user.id) })
       }
     },
     onError: (error) => {
-      console.error('Failed to update step completion:', error)
+      console.error('Failed to update task completion:', error)
     },
   })
+
+  // Derived values
+  const goals = goalsQuery.data || new Map()
+  const hasGoals = goals.size > 0
+
+  return {
+    // Data
+    goals, // Map<goal_uuid, Goal> - source of truth from get_batch_goal_object
+    hasGoals,
+    
+    // Query state
+    isLoading: goalsQuery.isLoading,
+    error: goalsQuery.error,
+    refetch: goalsQuery.refetch,
+    
+    // Mutations
+    createGoal: createGoalMutation.mutate,
+    createMilestone: createMilestoneMutation.mutate,
+    createTask: createTaskMutation.mutate,
+    updateTaskCompletion: updateTaskCompletionMutation.mutate,
+    
+    // Mutation states
+    isCreatingGoal: createGoalMutation.isPending,
+    isCreatingMilestone: createMilestoneMutation.isPending,
+    isCreatingTask: createTaskMutation.isPending,
+    isUpdatingTask: updateTaskCompletionMutation.isPending,
+  }
 }

@@ -1,36 +1,34 @@
 import { Goal } from '@/src/classes/Goal'
-import { Step } from '@/src/classes/Step'
+import { Milestone } from '@/src/classes/Milestone'
 
-export function determineCurrentStepIndex(steps: Step[]): number {
-  if (steps.length === 0) return -1
+export function determineCurrentMilestoneIndex(milestones: Milestone[]): number {
+  if (milestones.length === 0) return -1
   
-  // Find the first step that is not completed but has sessions (user is working on it)
-  const activeStepIndex = steps.findIndex(step => 
-    !step.isCompleted() && step.getSessions().length > 0
-  )
+  // Find the first milestone that is currently active (within date range)
+  const activeMilestoneIndex = milestones.findIndex(milestone => milestone.isActive())
   
-  if (activeStepIndex !== -1) return activeStepIndex
+  if (activeMilestoneIndex !== -1) return activeMilestoneIndex
   
-  // If no active step with sessions, find first incomplete step
-  const firstIncompleteIndex = steps.findIndex(step => !step.isCompleted())
+  // If no active milestone, find first upcoming milestone
+  const upcomingMilestoneIndex = milestones.findIndex(milestone => milestone.isUpcoming())
   
-  return firstIncompleteIndex !== -1 ? firstIncompleteIndex : steps.length - 1
+  return upcomingMilestoneIndex !== -1 ? upcomingMilestoneIndex : milestones.length - 1
 }
 
-export function areAllStepsCompleted(steps: Step[]): boolean {
-  if (steps.length === 0) return false
-  return steps.every(step => step.isCompleted())
+export function areAllMilestonesCompleted(milestones: Milestone[]): boolean {
+  if (milestones.length === 0) return false
+  return milestones.every(milestone => milestone.isPast())
 }
 
-export function logTimelineDebugInfo(goals: Goal[], selectedGoalIndex: number, currentGoal: Goal | null, sortedSteps: Step[], currentStepIndex: number, allStepsCompleted: boolean) {
+export function logTimelineDebugInfo(goals: Goal[], selectedGoalIndex: number, currentGoal: Goal | null, sortedMilestones: Milestone[], currentMilestoneIndex: number, allMilestonesCompleted: boolean) {
   console.log('🎨 [GoalTimeline] Received goals:', goals)
   console.log('🎨 [GoalTimeline] Goals count:', goals?.length || 0)
   console.log('🎨 [GoalTimeline] Selected goal index:', selectedGoalIndex)
   console.log('🎨 [GoalTimeline] Current goal:', currentGoal)
-  console.log('🎨 [GoalTimeline] Steps sorted by deadline:', sortedSteps.length)
-  console.log('🎨 [GoalTimeline] Step deadline order:', 
-    sortedSteps.map((step, i) => `${i + 1}. ${step.text} (${step.getFormattedEndDate()}) ${step.isCompleted() ? '✅' : '⭕'}`).join(' | ')
+  console.log('🎨 [GoalTimeline] Milestones sorted by date:', sortedMilestones.length)
+  console.log('🎨 [GoalTimeline] Milestone date order:', 
+    sortedMilestones.map((milestone, i) => `${i + 1}. ${milestone.text} (${milestone.getFormattedStartDate()}-${milestone.getFormattedEndDate()}) ${milestone.isPast() ? '✅' : milestone.isActive() ? '🟡' : '⭕'}`).join(' | ')
   )
-  console.log('🎨 [GoalTimeline] Current step index:', currentStepIndex)
-  console.log('🎨 [GoalTimeline] All steps completed:', allStepsCompleted)
+  console.log('🎨 [GoalTimeline] Current milestone index:', currentMilestoneIndex)
+  console.log('🎨 [GoalTimeline] All milestones completed:', allMilestonesCompleted)
 }

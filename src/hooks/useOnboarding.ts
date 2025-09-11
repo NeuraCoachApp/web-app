@@ -2,8 +2,6 @@ import { useQuery } from '@tanstack/react-query'
 import { useState, useCallback } from 'react'
 import { useAuth } from '@/src/contexts/AuthContext'
 import { useProfile, Profile, useUpdateProfile } from './useProfile'
-import { goalsKeys, useCreateGoal } from './useGoals'
-import { supabase } from '@/src/lib/supabase'
 import { useSpeechRecognition } from '@/src/lib/audio/speech-recognition'
 import { capitalizeWords } from '@/src/lib/utils'
 
@@ -187,7 +185,6 @@ export function useOnboardingFlow() {
   const { data: profile } = useProfile(user?.id)
   const { data: onboardingStatus } = useOnboardingStatus(user?.id)
   const updateProfileMutation = useUpdateProfile()
-  const createGoalMutation = useCreateGoal()
   const { extractName } = useSpeechRecognition()
 
   // State management
