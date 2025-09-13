@@ -7,8 +7,6 @@ import { calculateDayProgress } from './utils'
 import CalendarHeader from './CalendarHeader'
 import DayRectangle from './DayRectangle'
 import CalendarLegend from './CalendarLegend'
-import DaySessionDetails from './DaySessionDetails'
-import CalendarStats from './CalendarStats'
 
 export default function GoalCalendar({ goal }: CalendarProps) {
   const [selectedDay, setSelectedDay] = useState<DayProgress | null>(null)
@@ -56,8 +54,6 @@ export default function GoalCalendar({ goal }: CalendarProps) {
       </div>
       
       <CalendarLegend />
-      <DaySessionDetails dayProgress={selectedDay} />
-      <CalendarStats days={days} />
     </div>
   )
 }

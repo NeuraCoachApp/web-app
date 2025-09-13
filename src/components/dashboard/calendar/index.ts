@@ -5,8 +5,6 @@ export { default as GoalCalendar } from './GoalCalendar'
 export { default as CalendarHeader } from './CalendarHeader'
 export { default as DayRectangle } from './DayRectangle'
 export { default as CalendarLegend } from './CalendarLegend'
-export { default as DaySessionDetails } from './DaySessionDetails'
-export { default as CalendarStats } from './CalendarStats'
 
 // Types and utilities
 export * from './types'
