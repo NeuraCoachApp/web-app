@@ -17,6 +17,7 @@ export interface OnboardingStep {
   text: string
   subtext: string
   personality: string
+  [key: string]: unknown
 }
 
 export interface OnboardingState {

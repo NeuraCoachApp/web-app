@@ -12,6 +12,7 @@ export interface GoalCreationStep {
   text: string
   subtext: string
   personality: string
+  [key: string]: unknown
 }
 
 export interface GoalCreationState {

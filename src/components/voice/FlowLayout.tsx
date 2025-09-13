@@ -13,8 +13,7 @@ interface FlowLayoutProps {
   getCurrentText: () => string
   currentStepData?: {
     subtext?: string
-    [key: string]: any
-  }
+  } & Record<string, unknown>
   stepKey?: string | number
   showCaptions?: boolean
   showProgressIndicator?: boolean

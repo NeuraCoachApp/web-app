@@ -12,9 +12,9 @@ interface AuthContextType {
   session: Session | null
   loading: boolean
   signOut: () => Promise<void>
-  signIn: (email: string, password: string) => Promise<{ error: any }>
-  signUp: (email: string, password: string) => Promise<{ error: any; wasSignedIn?: boolean }>
-  resetPassword: (email: string) => Promise<{ error: any }>
+  signIn: (email: string, password: string) => Promise<{ error: Error | null }>
+  signUp: (email: string, password: string) => Promise<{ error: Error | null; wasSignedIn?: boolean }>
+  resetPassword: (email: string) => Promise<{ error: Error | null }>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -41,7 +41,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
    */
   function onAuthStateChange(callback: (event: AuthChangeEvent, session: Session | null) => void) {
     let currentSession: Session | null = null
-    const { data: authListener } = supabase.auth.onAuthStateChange((event: any, session: any) => {
+    const { data: authListener } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
       if (session?.user?.id === currentSession?.user?.id) return
       currentSession = session
       callback(event, session)

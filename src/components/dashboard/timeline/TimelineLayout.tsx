@@ -1,6 +1,7 @@
 import React from 'react'
 import { Target } from 'lucide-react'
 import { TimelineLayoutProps } from './types'
+import { Goal } from '@/src/classes'
 
 export default function TimelineLayout({ children }: TimelineLayoutProps) {
   return (
@@ -22,7 +23,7 @@ export function TimelineCompletionIndicator({
   currentGoal 
 }: { 
   allMilestonesCompleted: boolean
-  currentGoal: any
+  currentGoal: Goal | null
 }) {
   return (
     <div className="relative flex flex-col items-center ml-16">

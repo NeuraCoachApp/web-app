@@ -104,13 +104,21 @@ export class Milestone {
   /**
    * Convert to plain object (for JSON serialization)
    */
-  toJSON(): any {
+  toJSON(): {
+    uuid: string
+    text: string
+    start_at: string
+    end_at: string
+    goal_uuid: string
+    tasks: object[]
+  } {
     return {
       uuid: this.uuid,
       text: this.text,
       start_at: this.start_at,
       end_at: this.end_at,
-      goal_uuid: this.goal_uuid
+      goal_uuid: this.goal_uuid,
+      tasks: [] // Tasks are managed at the Goal level, not Milestone level
     }
   }
 

@@ -45,8 +45,8 @@ export default function SignUpForm() {
         // Redirect to onboarding immediately for new users
         router.push('/onboarding')
       }
-    } catch (error: any) {
-      setMessage(error.message)
+    } catch (error: unknown) {
+      setMessage(error instanceof Error ? error.message : 'An error occurred')
     } finally {
       setLoading(false)
       setIsSigningUp(false)

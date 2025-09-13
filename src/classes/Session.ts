@@ -160,6 +160,42 @@ export class Session {
   }
 
   /**
+   * Add multiple task completions at once (useful for daily check-ins)
+   */
+  addMultipleTaskCompletions(taskCompletions: { taskUuid: string, isCompleted: boolean }[]): void {
+    taskCompletions.forEach(({ taskUuid, isCompleted }) => {
+      this.setTaskCompletion(taskUuid, isCompleted)
+    })
+  }
+
+  /**
+   * Get all task UUIDs that were worked on in this session (completed or not)
+   */
+  getWorkedOnTaskUuids(): string[] {
+    return this.completion
+      .map(item => item.task_uuid)
+      .filter((uuid): uuid is string => uuid !== null)
+  }
+
+  /**
+   * Check if this session represents a daily check-in (has multiple task completions)
+   */
+  isDailyCheckIn(): boolean {
+    return this.completion.length > 1
+  }
+
+  /**
+   * Get summary of work done in this session
+   */
+  getWorkSummary(): { totalTasks: number, completedTasks: number, incompleteTasks: number } {
+    const totalTasks = this.completion.length
+    const completedTasks = this.getCompletedTasksCount()
+    const incompleteTasks = this.getIncompleteTasksCount()
+    
+    return { totalTasks, completedTasks, incompleteTasks }
+  }
+
+  /**
    * Get formatted date
    */
   getFormattedDate(): string {
@@ -212,7 +248,18 @@ export class Session {
   /**
    * Convert to plain object (for JSON serialization)
    */
-  toJSON(): any {
+  toJSON(): {
+    uuid: string
+    created_at: string
+    goal_uuid: string
+    user_uuid: string
+    summary: string
+    mood: number
+    motivation: number
+    blocker: string
+    completion: Database["public"]["CompositeTypes"]["task_completion"][]
+    goal?: object
+  } {
     return {
       uuid: this.uuid,
       created_at: this.created_at,

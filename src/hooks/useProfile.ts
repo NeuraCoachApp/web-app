@@ -20,7 +20,7 @@ export const profileKeys = {
 /**
  * Get or create a profile for a user
  */
-async function getOrCreateProfile(userUuid: string): Promise<{ data: Profile | null; error: any }> {
+async function getOrCreateProfile(userUuid: string): Promise<{ data: Profile | null; error: Error | null }> {
   // Use get_profile RPC which returns full profile data
   const { data, error } = await supabase.rpc('get_profile', {
     p_user_uuid: userUuid
@@ -33,7 +33,7 @@ async function getOrCreateProfile(userUuid: string): Promise<{ data: Profile | n
 /**
  * Update a user's profile
  */
-async function updateProfile(userUuid: string, updates: ProfileUpdate): Promise<{ data: Profile | null; error: any }> {
+async function updateProfile(userUuid: string, updates: ProfileUpdate): Promise<{ data: Profile | null; error: Error | null }> {
   // First update using the RPC function
   const { error: updateError } = await supabase.rpc('update_profile', {
     p_user_uuid: userUuid,

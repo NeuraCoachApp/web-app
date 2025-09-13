@@ -136,7 +136,16 @@ export class Goal {
   /**
    * Convert to plain object (for JSON serialization)
    */
-  toJSON(): any {
+  toJSON(): {
+    uuid: string
+    text: string
+    created_at: string
+    init_end_at: string
+    user_uuid: string
+    milestones: object[]
+    tasks: object[]
+    sessions: object[]
+  } {
     return {
       uuid: this.uuid,
       text: this.text,

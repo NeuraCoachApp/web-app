@@ -208,7 +208,7 @@ function getDateNDaysAgo(daysAgo: number): Date {
  * - Some tasks completed, some in progress
  * - Sessions for task progress tracking
  */
-export function generateMockGoalData(userId: string): { success: boolean; data?: Goal; error?: any } {
+export function generateMockGoalData(userId: string): { success: boolean; data?: Goal; error?: Error } {
   try {
     console.log('🎯 Generating mock goal data for user:', userId)
 
@@ -246,6 +246,7 @@ export function generateMockGoalData(userId: string): { success: boolean; data?:
       })
       
       // Create tasks for this milestone
+      const milestoneTasks: Task[] = []
       milestoneTemplate.tasks.forEach((taskText, taskIndex) => {
         const taskStartDate = new Date(milestoneStartDate.getTime() + taskIndex * 7 * 24 * 60 * 60 * 1000) // 7 days apart
         const taskEndDate = new Date(taskStartDate.getTime() + 7 * 24 * 60 * 60 * 1000) // 7 days duration
@@ -263,29 +264,60 @@ export function generateMockGoalData(userId: string): { success: boolean; data?:
           milestone_uuid: milestone.uuid
         })
         
-        // Create 1-3 sessions for each task
-        const sessionCount = randomBetween(1, 3)
-        for (let sessionIndex = 0; sessionIndex < sessionCount; sessionIndex++) {
-          const sessionDate = new Date(taskStartDate.getTime() + sessionIndex * 2 * 24 * 60 * 60 * 1000) // Every 2 days
-          sessionDate.setHours(randomBetween(8, 20), randomBetween(0, 59))
-          
-          const session = new Session({
-            uuid: `session-${Date.now()}-${milestoneIndex}-${taskIndex}-${sessionIndex}`,
-            created_at: sessionDate.toISOString(),
-            goal_uuid: goal.uuid,
-            user_uuid: userId,
-            summary: SESSION_SUMMARIES[Math.floor(Math.random() * SESSION_SUMMARIES.length)],
-            mood: randomBetween(5, 9),
-            motivation: randomBetween(5, 9),
-            blocker: Math.random() < 0.3 ? "Had some challenges but pushed through" : "",
-            completion: isCompleted ? [{ task_uuid: task.uuid, iscompleted: true }] : []
-          })
-          
-          session.setGoal(goal)
-          goal.addSession(session)
-        }
-        
+        milestoneTasks.push(task)
         goal.addTask(task)
+      })
+      
+      // Create realistic daily check-in sessions
+      // Generate sessions every 2-3 days during the milestone period
+      const sessionDates: Date[] = []
+      let currentSessionDate = new Date(milestoneStartDate)
+      
+      while (currentSessionDate <= milestoneEndDate) {
+        sessionDates.push(new Date(currentSessionDate))
+        // Next session in 2-3 days
+        currentSessionDate = new Date(currentSessionDate.getTime() + randomBetween(2, 3) * 24 * 60 * 60 * 1000)
+      }
+      
+      sessionDates.forEach((sessionDate, sessionIndex) => {
+        // Set realistic check-in time (afternoon/evening)
+        sessionDate.setHours(randomBetween(16, 22), randomBetween(0, 59)) // 4PM - 10PM
+        
+        // Determine which tasks were active/worked on this day
+        const tasksActiveOnThisDay = milestoneTasks.filter(task => {
+          const taskStart = new Date(task.start_at)
+          const taskEnd = new Date(task.end_at)
+          return sessionDate >= taskStart && sessionDate <= taskEnd
+        })
+        
+        // Create completion array for this session (multiple tasks can be completed in one day)
+        const completion: { task_uuid: string, iscompleted: boolean }[] = []
+        tasksActiveOnThisDay.forEach(task => {
+          // 70% chance of working on an active task during check-in
+          if (Math.random() < 0.7) {
+            // If task is already completed, mark as completed; otherwise random chance
+            const wasCompleted = task.isCompleted || Math.random() < 0.4
+            completion.push({
+              task_uuid: task.uuid,
+              iscompleted: wasCompleted
+            })
+          }
+        })
+        
+        const session = new Session({
+          uuid: `session-${Date.now()}-${milestoneIndex}-${sessionIndex}`,
+          created_at: sessionDate.toISOString(),
+          goal_uuid: goal.uuid,
+          user_uuid: userId,
+          summary: SESSION_SUMMARIES[Math.floor(Math.random() * SESSION_SUMMARIES.length)],
+          mood: randomBetween(5, 9),
+          motivation: randomBetween(5, 9),
+          blocker: Math.random() < 0.3 ? "Had some challenges but pushed through" : "",
+          completion: completion
+        })
+        
+        session.setGoal(goal)
+        goal.addSession(session)
       })
       
       goal.addMilestone(milestone)
@@ -299,7 +331,7 @@ export function generateMockGoalData(userId: string): { success: boolean; data?:
     return { success: true, data: goal }
   } catch (error) {
     console.error('Error generating 7-day scheduled mock goal data:', error)
-    return { success: false, error }
+    return { success: false, error: error instanceof Error ? error : new Error(String(error)) }
   }
 }
 
@@ -309,14 +341,17 @@ let mockGoalsStore: { [userId: string]: Goal[] } = {}
 /**
  * Generate mock data for current authenticated user and insert into database
  */
-export async function generateMockDataForCurrentUser(): Promise<{ success: boolean; data?: Goal; error?: any }> {
+export async function generateMockDataForCurrentUser(): Promise<{ success: boolean; data?: Goal; error?: Error }> {
   try {
     // Get current user
     const { data: { user }, error: userError } = await supabase.auth.getUser()
     
     if (userError || !user) {
       console.error('No authenticated user found:', userError)
-      return { success: false, error: userError || 'No authenticated user' }
+      return { 
+        success: false, 
+        error: userError instanceof Error ? userError : new Error(userError || 'No authenticated user') 
+      }
     }
 
     console.log('🎯 Generating and inserting mock goal data into database for user:', user.id)
@@ -368,6 +403,7 @@ export async function generateMockDataForCurrentUser(): Promise<{ success: boole
       console.log('✅ Created milestone:', milestoneData.uuid)
 
       // Create tasks for this milestone
+      const milestoneTasks: (Tables<'task'> & { start_at: string; end_at: string })[] = []
       for (let taskIndex = 0; taskIndex < milestoneTemplate.tasks.length; taskIndex++) {
         const taskText = milestoneTemplate.tasks[taskIndex]
         const taskStartDate = new Date(milestoneStartDate.getTime() + taskIndex * 7 * 24 * 60 * 60 * 1000) // 7 days apart
@@ -391,28 +427,66 @@ export async function generateMockDataForCurrentUser(): Promise<{ success: boole
           continue
         }
 
-        // Create 1-2 sessions for each task
-        const sessionCount = Math.floor(Math.random() * 2) + 1
-        for (let sessionIndex = 0; sessionIndex < sessionCount; sessionIndex++) {
-          const sessionDate = new Date(taskStartDate.getTime() + sessionIndex * 2 * 24 * 60 * 60 * 1000) // Every 2 days
-          sessionDate.setHours(Math.floor(Math.random() * 12) + 8, Math.floor(Math.random() * 60)) // 8AM-8PM
-
-          await supabase
-            .from('session')
-            .insert({
-              goal_uuid: goalData.uuid,
-              user_uuid: user.id,
-              summary: SESSION_SUMMARIES[Math.floor(Math.random() * SESSION_SUMMARIES.length)],
-              mood: Math.floor(Math.random() * 5) + 5, // 5-9
-              motivation: Math.floor(Math.random() * 5) + 5, // 5-9
-              blocker: Math.random() < 0.3 ? "Had some challenges but pushed through" : "",
-              completion: taskData.isCompleted ? [{ task_uuid: taskData.uuid, iscompleted: true }] : [],
-              created_at: sessionDate.toISOString()
-            })
-        }
-
-        console.log('✅ Created task with sessions:', taskData.uuid)
+        milestoneTasks.push({
+          ...taskData,
+          start_at: taskStartDate.toISOString(),
+          end_at: taskEndDate.toISOString()
+        })
+        console.log('✅ Created task:', taskData.uuid)
       }
+
+      // Create realistic daily check-in sessions for this milestone
+      // Generate sessions every 2-3 days during the milestone period
+      const sessionDates: Date[] = []
+      let currentSessionDate = new Date(milestoneStartDate)
+      
+      while (currentSessionDate <= milestoneEndDate) {
+        sessionDates.push(new Date(currentSessionDate))
+        // Next session in 2-3 days
+        const daysToAdd = Math.floor(Math.random() * 2) + 2 // 2-3 days
+        currentSessionDate = new Date(currentSessionDate.getTime() + daysToAdd * 24 * 60 * 60 * 1000)
+      }
+      
+      for (const sessionDate of sessionDates) {
+        // Set realistic check-in time (afternoon/evening)
+        sessionDate.setHours(Math.floor(Math.random() * 6) + 16, Math.floor(Math.random() * 60)) // 4PM-10PM
+        
+        // Determine which tasks were active/worked on this day
+        const tasksActiveOnThisDay = milestoneTasks.filter(task => {
+          const taskStart = new Date(task.start_at)
+          const taskEnd = new Date(task.end_at)
+          return sessionDate >= taskStart && sessionDate <= taskEnd
+        })
+        
+        // Create completion array for this session (multiple tasks can be completed in one day)
+        const completion: { task_uuid: string, iscompleted: boolean }[] = []
+        tasksActiveOnThisDay.forEach(task => {
+          // 70% chance of working on an active task during check-in
+          if (Math.random() < 0.7) {
+            // If task is already completed, mark as completed; otherwise random chance
+            const wasCompleted = task.isCompleted || Math.random() < 0.4
+            completion.push({
+              task_uuid: task.uuid,
+              iscompleted: wasCompleted
+            })
+          }
+        })
+
+        await supabase
+          .from('session')
+          .insert({
+            goal_uuid: goalData.uuid,
+            user_uuid: user.id,
+            summary: SESSION_SUMMARIES[Math.floor(Math.random() * SESSION_SUMMARIES.length)],
+            mood: Math.floor(Math.random() * 5) + 5, // 5-9
+            motivation: Math.floor(Math.random() * 5) + 5, // 5-9
+            blocker: Math.random() < 0.3 ? "Had some challenges but pushed through" : "",
+            completion: completion,
+            created_at: sessionDate.toISOString()
+          })
+      }
+
+      console.log('✅ Created milestone with realistic daily check-in sessions:', milestoneData.uuid)
     }
 
     // Create a Goal class instance for return (though it won't have all the relations populated)
@@ -422,7 +496,7 @@ export async function generateMockDataForCurrentUser(): Promise<{ success: boole
     return { success: true, data: goal }
   } catch (error) {
     console.error('❌ Error generating mock data:', error)
-    return { success: false, error }
+    return { success: false, error: error instanceof Error ? error : new Error(String(error)) }
   }
 }
 
@@ -472,12 +546,12 @@ export function clearMockSessions(userId: string): void {
 /**
  * Generate additional mock goal for a user
  */
-export async function generateAdditionalMockGoal(userId: string): Promise<{ success: boolean; data?: Goal; error?: any }> {
+export async function generateAdditionalMockGoal(userId: string): Promise<{ success: boolean; data?: Goal; error?: Error }> {
   try {
     return await generateMockDataForCurrentUser()
   } catch (error) {
     console.error('❌ Error generating additional mock goal:', error)
-    return { success: false, error }
+    return { success: false, error: error instanceof Error ? error : new Error(String(error)) }
   }
 }
 

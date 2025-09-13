@@ -1,5 +1,59 @@
 // Speech Recognition Service for capturing voice input
 
+// Type declarations for Web Speech API
+declare global {
+  interface Window {
+    SpeechRecognition: typeof SpeechRecognition
+    webkitSpeechRecognition: typeof SpeechRecognition
+  }
+}
+
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean
+  interimResults: boolean
+  lang: string
+  maxAlternatives: number
+  start(): void
+  stop(): void
+  abort(): void
+  onresult: ((event: SpeechRecognitionEvent) => void) | null
+  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null
+  onend: (() => void) | null
+}
+
+interface SpeechRecognitionEvent extends Event {
+  resultIndex: number
+  results: SpeechRecognitionResultList
+}
+
+interface SpeechRecognitionResultList {
+  length: number
+  item(index: number): WebSpeechRecognitionResult
+  [index: number]: WebSpeechRecognitionResult
+}
+
+interface WebSpeechRecognitionResult {
+  length: number
+  item(index: number): SpeechRecognitionAlternative
+  [index: number]: SpeechRecognitionAlternative
+  isFinal: boolean
+}
+
+interface SpeechRecognitionAlternative {
+  transcript: string
+  confidence: number
+}
+
+interface SpeechRecognitionErrorEvent extends Event {
+  error: string
+  message: string
+}
+
+declare const SpeechRecognition: {
+  prototype: SpeechRecognition
+  new (): SpeechRecognition
+}
+
 interface SpeechRecognitionOptions {
   continuous?: boolean
   interimResults?: boolean
@@ -17,7 +71,7 @@ interface NameExtractionResult {
 }
 
 class SpeechRecognitionService {
-  private recognition: any = null
+  private recognition: SpeechRecognition | null = null
   private isSupported = false
 
   constructor() {
@@ -66,6 +120,11 @@ class SpeechRecognitionService {
     }
 
     return new Promise((resolve, reject) => {
+      if (!this.recognition) {
+        reject(new Error('Speech recognition not available'))
+        return
+      }
+
       // Configure recognition
       this.recognition.continuous = options.continuous || false
       this.recognition.interimResults = options.interimResults !== false // Default to true for real-time feedback
@@ -74,7 +133,7 @@ class SpeechRecognitionService {
 
       let finalTranscript = ''
 
-      this.recognition.onresult = (event: any) => {
+      this.recognition.onresult = (event: SpeechRecognitionEvent) => {
         let interimTranscript = ''
 
         for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -102,7 +161,7 @@ class SpeechRecognitionService {
         }
       }
 
-      this.recognition.onerror = (event: any) => {
+      this.recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
         reject(new Error(`Speech recognition error: ${event.error}`))
       }
 

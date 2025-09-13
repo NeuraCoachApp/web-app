@@ -37,8 +37,8 @@ export default function SignInForm() {
       setTimeout(() => {
         router.push('/dashboard')
       }, 1000)
-    } catch (error: any) {
-      setMessage(error.message)
+    } catch (error: unknown) {
+      setMessage(error instanceof Error ? error.message : 'An error occurred')
     } finally {
       setLoading(false)
     }

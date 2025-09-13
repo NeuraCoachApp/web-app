@@ -167,7 +167,16 @@ export class Task {
   /**
    * Convert to plain object (for JSON serialization)
    */
-  toJSON(): any {
+  toJSON(): {
+    uuid: string
+    text: string
+    created_at: string
+    start_at: string
+    end_at: string
+    isCompleted: boolean
+    goal_uuid: string
+    milestone_uuid: string
+  } {
     return {
       uuid: this.uuid,
       text: this.text,
