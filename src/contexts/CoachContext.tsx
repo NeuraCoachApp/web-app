@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useCallback, useRef, useEff
 import { useVoiceSynthesis } from '@/src/lib/audio/elevenlabs'
 import { useSpeechRecognition } from '@/src/lib/audio/speech-recognition'
 import { getAudioAnalyzer, AudioAnalysisData } from '@/src/lib/audio/audio-analyzer'
+import { RetryBanner } from '@/src/components/ui/retry-banner'
 
 interface CoachState {
   isSpeaking: boolean
@@ -15,6 +16,9 @@ interface CoachState {
   spokenMessages: Set<string>
   hasUserInteracted: boolean
   audioAnalysisData: AudioAnalysisData | null
+  isRetrying: boolean
+  retryAttempt: number
+  retryDelay: number
 }
 
 interface CoachContextType extends CoachState {
@@ -43,7 +47,10 @@ export function CoachProvider({ children }: { children: React.ReactNode }) {
     currentWordIndex: 0,
     spokenMessages: new Set<string>(),
     hasUserInteracted: false,
-    audioAnalysisData: null
+    audioAnalysisData: null,
+    isRetrying: false,
+    retryAttempt: 0,
+    retryDelay: 0
   })
 
   const { playText, playTextWithProgress, prefetchAudio } = useVoiceSynthesis()
@@ -118,6 +125,14 @@ export function CoachProvider({ children }: { children: React.ReactNode }) {
             currentMessage: message
           }))
         },
+        onRetry: (attempt: number, delay: number) => {
+          setState(prev => ({
+            ...prev,
+            isRetrying: true,
+            retryAttempt: attempt,
+            retryDelay: delay
+          }))
+        },
         onStart: (audio) => {
           // Store reference to current audio for single instance management
           currentSpeechRef.current = audio
@@ -137,7 +152,10 @@ export function CoachProvider({ children }: { children: React.ReactNode }) {
               ...prev,
               isPreparingSpeech: false,
               isSpeaking: true,
-              spokenMessages: newSpokenMessages
+              spokenMessages: newSpokenMessages,
+              isRetrying: false,
+              retryAttempt: 0,
+              retryDelay: 0
             }
           })
         },
@@ -163,7 +181,10 @@ export function CoachProvider({ children }: { children: React.ReactNode }) {
             isPreparingSpeech: false,
             currentMessage: null,
             currentWordIndex: 0,
-            audioAnalysisData: null
+            audioAnalysisData: null,
+            isRetrying: false,
+            retryAttempt: 0,
+            retryDelay: 0
           }))
           currentSpeechRef.current = null
         },
@@ -310,7 +331,18 @@ export function CoachProvider({ children }: { children: React.ReactNode }) {
     prefetchAudio
   }
 
-  return <CoachContext.Provider value={value}>{children}</CoachContext.Provider>
+  return (
+    <CoachContext.Provider value={value}>
+      {children}
+      <RetryBanner
+        isVisible={state.isRetrying}
+        attempt={state.retryAttempt}
+        totalAttempts={3}
+        delayMs={state.retryDelay}
+        onCancel={() => setState(prev => ({ ...prev, isRetrying: false, retryAttempt: 0, retryDelay: 0 }))}
+      />
+    </CoachContext.Provider>
+  )
 }
 
 export function useCoach() {

@@ -97,6 +97,18 @@ export function GoalCreationProvider({ children }: GoalCreationProviderProps) {
     }
   }, [goalCreationFlow.state.currentStep, router, showIntro])
 
+  // Handle completion and redirect to dashboard
+  useEffect(() => {
+    if (goalCreationFlow.state.backgroundProcessStatus === 'completed') {
+      console.log('🎯 [Goal Creation] Goal creation completed, redirecting to dashboard')
+      // Add a small delay to ensure the user sees the completion
+      const timer = setTimeout(() => {
+        router.push('/dashboard')
+      }, 2000)
+      return () => clearTimeout(timer)
+    }
+  }, [goalCreationFlow.state.backgroundProcessStatus, router])
+
   if (!user) {
     return null
   }

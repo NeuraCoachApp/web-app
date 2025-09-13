@@ -4,7 +4,7 @@ import { useAuth } from '@/src/contexts/AuthContext'
 import { useProfile } from '../useProfile'
 import { useGoals } from '../useGoals'
 import { Tables } from '@/src/types/database'
-import { Goal } from '@/src/classes/Goal'
+import { Goal, Milestone, Task } from '@/src/classes'
 import { generateGoalSteps, validateOpenAIConfiguration, GeneratedStep } from '@/src/lib/openai-steps'
 
 export interface GoalCreationStep {
@@ -17,9 +17,22 @@ export interface GoalCreationStep {
 
 export interface GoalCreationState {
   currentStep: number
+  // 10 comprehensive questions
+  goal: string                    // What is your goal?
+  deadline: string               // When do you want to complete it by?
+  motivation: string             // Why is this goal important to you?
+  currentProgress: string        // Where are you right now, what have you done so far?
+  obstacles: string              // What obstacles have you faced (or do you expect to face)?
+  dailySuccess: string           // What would success look like for you on a daily basis?
+  timeCommitment: string         // How much time per day can you realistically commit?
+  bestTimeOfDay: string          // What time of day do you work best?
+  supportNeeded: string          // What support, tools, or resources do you need?
+  celebration: string            // How do you want to celebrate at the end?
+  notificationTime: string       // Notification time (keeping existing)
+  
+  // Legacy fields (keeping for backwards compatibility during transition)
   reason: string
-  goal: string
-  notificationTime: string
+  
   speechError: string
   goalCreationChecked: boolean
   generatedSteps: GeneratedStep[]
@@ -33,55 +46,67 @@ export interface GoalCreationStatus {
   shouldRedirectToGoalCreation: boolean
 }
 
-// Goal creation flow steps
+// Goal creation flow steps - Only the 10 essential questions
 export const goalCreationSteps: GoalCreationStep[] = [
   {
-    id: 'questions_before',
-    text: "Before we start, I had a few questions.",
+    id: 'goal_question',
+    text: "What is your goal?",
     subtext: "",
-    personality: "gentle and curious"
+    personality: "focused and supportive"
   },
   {
-    id: 'questions_time',
-    text: "So tell me, what brings you to me today?",
+    id: 'deadline_question',
+    text: "When do you want to complete it by?",
     subtext: "",
-    personality: "caring and attentive"
+    personality: "practical and encouraging"
   },
   {
-    id: 'acknowledgment',
-    text: "I hear you. We can definitely work on that.",
+    id: 'motivation_question',
+    text: "Why is this goal important to you?",
     subtext: "",
-    personality: "understanding and supportive"
+    personality: "curious and empathetic"
   },
   {
-    id: 'goal_setup',
-    text: "What are your goals?",
-    subtext: "Examples: Productivity, Focus, Health, Confidence",
-    personality: "supportive and focused"
+    id: 'current_progress_question',
+    text: "Where are you right now, what have you done so far?",
+    subtext: "",
+    personality: "understanding and non-judgmental"
   },
   {
-    id: 'notification_time',
-    text: "What time would you like to receive daily notifications?",
+    id: 'obstacles_question',
+    text: "What obstacles have you faced (or do you expect to face)?",
+    subtext: "",
+    personality: "thoughtful and strategic"
+  },
+  {
+    id: 'daily_success_question',
+    text: "What would success look like for you on a daily basis?",
+    subtext: "",
+    personality: "inspiring and practical"
+  },
+  {
+    id: 'time_commitment_question',
+    text: "How much time per day can you realistically commit?",
+    subtext: "",
+    personality: "realistic and supportive"
+  },
+  {
+    id: 'best_time_question',
+    text: "What time of day do you work best?",
     subtext: "",
     personality: "helpful and practical"
   },
   {
-    id: 'daily_checkins',
-    text: "Note that people who check in daily see progress and mindset shifts faster than those who do not check in regularly.",
+    id: 'support_question',
+    text: "What support, tools, or resources do you need?",
     subtext: "",
-    personality: "encouraging and factual"
+    personality: "resourceful and caring"
   },
   {
-    id: 'results_timeline',
-    text: "Many people see results in as little as 2 weeks!",
+    id: 'celebration_question',
+    text: "How do you want to celebrate at the end?",
     subtext: "",
-    personality: "optimistic and motivating"
-  },
-  {
-    id: 'final',
-    text: "Alright, that's all the talking I'll do for now. Let's get started!",
-    subtext: "",
-    personality: "excited and ready"
+    personality: "joyful and motivating"
   }
 ]
 
@@ -186,14 +211,27 @@ export function useGoalCreationFlow() {
   const { user } = useAuth()
   const { data: profile } = useProfile(user?.id)
   const { data: goalCreationStatus } = useGoalCreationStatus(user?.id)
-  const { createGoal } = useGoals(user?.id)
+  const { createGoalAsync, createMilestoneAsync, createTaskAsync } = useGoals(user?.id)
 
   // State management
   const [state, setState] = useState<GoalCreationState>({
     currentStep: 0,
-    reason: '',
+    // 10 comprehensive questions
     goal: '',
+    deadline: '',
+    motivation: '',
+    currentProgress: '',
+    obstacles: '',
+    dailySuccess: '',
+    timeCommitment: '',
+    bestTimeOfDay: '',
+    supportNeeded: '',
+    celebration: '',
     notificationTime: '09:00',
+    
+    // Legacy fields
+    reason: '',
+    
     speechError: '',
     goalCreationChecked: false,
     generatedSteps: [],
@@ -258,50 +296,254 @@ export function useGoalCreationFlow() {
   }, [])
 
   // Background goal creation process
-  const createGoalInBackground = useCallback(async (goalText: string, reason: string) => {
+  const createGoalInBackground = useCallback(async (goalText: string, motivation: string) => {
     if (!user) return
 
-    console.log('🎯 [Goal Creation] Starting background goal creation process')
-    setState(prev => ({ ...prev, backgroundProcessStatus: 'creating-goal' }))
+    console.log('🎯 [Goal Creation] Starting comprehensive goal creation process')
+    setState(prev => ({ ...prev, backgroundProcessStatus: 'generating-steps' }))
     
     try {
-      // Create goal directly (we'll add milestone/task generation later if needed)
-      createGoal({ 
-        goalText: goalText,
-        initEndAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString() // 90 days from now
-      })
-      console.log('✅ [Goal Creation] Successfully created goal')
+      // Step 1: Generate AI-powered milestones and tasks using comprehensive data
+      console.log('🤖 [Goal Creation] Generating AI steps with comprehensive context')
       
+      // Create a rich context for AI generation
+      const comprehensiveContext = `
+Goal: ${goalText}
+Motivation: ${motivation}
+Current Progress: ${state.currentProgress}
+Time Commitment: ${state.timeCommitment} per day
+Best Time: ${state.bestTimeOfDay}
+Obstacles: ${state.obstacles}
+Daily Success Metrics: ${state.dailySuccess}
+Support Needed: ${state.supportNeeded}
+Celebration Plan: ${state.celebration}
+`.trim()
+
+      const generatedSteps = await generateSteps(goalText, comprehensiveContext)
+      
+      if (!generatedSteps || generatedSteps.length === 0) {
+        throw new Error('Failed to generate AI steps for goal')
+      }
+      
+      console.log('🤖 [Goal Creation] AI generated milestones with daily tasks:', 
+        generatedSteps.map(step => ({
+          milestone: step.text,
+          duration: step.estimated_duration_days,
+          dailyTaskCount: step.daily_tasks.length,
+          dailyTasks: step.daily_tasks.map(task => ({
+            day: task.day_number,
+            text: task.text,
+            isPrep: task.is_preparation
+          }))
+        }))
+      )
+
+      console.log('✅ [Goal Creation] Generated AI steps:', generatedSteps.length)
+
+      // Step 2: Parse deadline to create a proper end date
+      let endDate = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000) // Default 90 days
+      
+      if (state.deadline.trim()) {
+        const deadlineText = state.deadline.toLowerCase()
+        if (deadlineText.includes('week')) {
+          const weeks = parseInt(deadlineText.match(/(\d+)/)?.[0] || '12')
+          endDate = new Date(Date.now() + weeks * 7 * 24 * 60 * 60 * 1000)
+        } else if (deadlineText.includes('month')) {
+          const months = parseInt(deadlineText.match(/(\d+)/)?.[0] || '3')
+          endDate = new Date(Date.now() + months * 30 * 24 * 60 * 60 * 1000)
+        } else if (deadlineText.includes('year')) {
+          const years = parseInt(deadlineText.match(/(\d+)/)?.[0] || '1')
+          endDate = new Date(Date.now() + years * 365 * 24 * 60 * 60 * 1000)
+        }
+      }
+
+      setState(prev => ({ ...prev, backgroundProcessStatus: 'creating-goal' }))
+
+      // Step 3: Create the goal first
+      const goalData = { 
+        goalText: goalText,
+        initEndAt: endDate.toISOString()
+      }
+
+      console.log('🎯 [Goal Creation] Creating goal with AI-generated structure')
+      const createdGoal = await createGoalAsync(goalData)
+      console.log('✅ [Goal Creation] Goal created successfully:', createdGoal.uuid)
+
+      // Step 4: Create milestones and tasks from AI-generated steps
+      console.log('🎯 [Goal Creation] Creating milestones and tasks from AI steps')
+      
+      const startDate = new Date()
+      let currentDate = new Date(startDate)
+      
+      for (let i = 0; i < generatedSteps.length; i++) {
+        const step = generatedSteps[i]
+        const milestoneStartDate = new Date(currentDate)
+        const milestoneEndDate = new Date(currentDate.getTime() + step.estimated_duration_days * 24 * 60 * 60 * 1000)
+        
+        console.log(`🎯 [Goal Creation] Creating milestone ${i + 1}: "${step.text}" with ${step.daily_tasks.length} daily tasks`)
+        
+        // Create milestone
+        const milestone = await createMilestoneAsync({
+          goalUuid: createdGoal.uuid,
+          milestoneData: {
+            text: step.text,
+            start_at: milestoneStartDate.toISOString(),
+            end_at: milestoneEndDate.toISOString()
+          }
+        })
+        console.log('✅ [Goal Creation] Milestone created:', milestone.uuid)
+
+        // Create individual daily tasks for this milestone
+        console.log(`📋 [Goal Creation] Creating ${step.daily_tasks.length} daily tasks for milestone: "${step.text}"`)
+        
+        for (let j = 0; j < step.daily_tasks.length; j++) {
+          const dailyTask = step.daily_tasks[j]
+          
+          // Calculate individual task dates (each task is one day)
+          const taskDate = new Date(milestoneStartDate.getTime() + (dailyTask.day_number - 1) * 24 * 60 * 60 * 1000)
+          const taskStartDate = new Date(taskDate)
+          taskStartDate.setHours(0, 0, 0, 0) // Start of day
+          
+          const taskEndDate = new Date(taskDate)
+          taskEndDate.setHours(23, 59, 59, 999) // End of day
+          
+          console.log(`📅 [Goal Creation] Creating daily task ${j + 1}/${step.daily_tasks.length}: "${dailyTask.text}" for day ${dailyTask.day_number}`)
+          console.log(`🎯 [Goal Creation] Success criteria: "${dailyTask.success_criteria}"`)
+          if (dailyTask.is_preparation) {
+            console.log(`🔧 [Goal Creation] This is a preparation task`)
+          }
+          
+          const task = await createTaskAsync({
+            goalUuid: createdGoal.uuid,
+            milestoneUuid: milestone.uuid,
+            taskData: {
+              text: dailyTask.text,
+              start_at: taskStartDate.toISOString(),
+              end_at: taskEndDate.toISOString()
+            }
+          })
+          console.log(`✅ [Goal Creation] Daily task created: ${task.uuid}`)
+        }
+
+        // Move to next milestone start date (add 1 day buffer after milestone ends)
+        currentDate = new Date(milestoneEndDate.getTime() + 24 * 60 * 60 * 1000)
+      }
+      
+      console.log('✅ [Goal Creation] Successfully created complete goal structure with AI-generated milestones and tasks')
       setState(prev => ({ ...prev, backgroundProcessStatus: 'completed' }))
-    } catch (error) {
-      console.error('❌ [Goal Creation] Background goal creation failed:', error)
-      setState(prev => ({ ...prev, backgroundProcessStatus: 'failed' }))
+      
+    } catch (error: any) {
+      console.error('❌ [Goal Creation] Comprehensive goal creation failed:', error)
+      
+      // Provide specific error messages for different failure types
+      let errorMessage = 'Failed to create goal'
+      if (error?.status === 429) {
+        errorMessage = 'OpenAI rate limit exceeded. Please try again in a few minutes.'
+      } else if (error?.message?.includes('OpenAI')) {
+        errorMessage = 'AI service temporarily unavailable. Please try again.'
+      } else if (error?.message?.includes('Failed to generate')) {
+        errorMessage = 'Could not generate goal structure. Please try again.'
+      }
+      
+      setState(prev => ({ 
+        ...prev, 
+        backgroundProcessStatus: 'failed',
+        stepGenerationError: errorMessage
+      }))
     }
-  }, [user, createGoal])
+  }, [user, createGoalAsync, createMilestoneAsync, createTaskAsync, generateSteps, state])
 
   // Handle next step logic for goal creation flow
   const handleNext = useCallback(async () => {
-    if (state.currentStep === 1 && state.reason.trim()) { // questions_time step
-      setState(prev => ({ ...prev, currentStep: 2 }))
-    } else if (state.currentStep === 3 && state.goal.trim()) { // goal_setup step
-      // Start background goal creation process (don't await)
-      createGoalInBackground(state.goal.trim(), state.reason.trim())
-      
-      // Immediately move to next step - don't wait for background process
-      setState(prev => ({ ...prev, currentStep: 4 }))
-    } else if (state.currentStep === 4) { // notification_time step
-      setState(prev => ({ ...prev, currentStep: 5 }))
-    } else if (state.currentStep < goalCreationSteps.length - 1) {
-      setState(prev => ({ ...prev, currentStep: state.currentStep + 1 }))
+    const currentStepData = goalCreationSteps[state.currentStep]
+    const stepId = currentStepData?.id
+    
+    // Handle input validation and progression for each question step
+    switch (stepId) {
+      case 'goal_question':
+        if (state.goal.trim()) {
+          setState(prev => ({ ...prev, currentStep: state.currentStep + 1 }))
+        }
+        break
+      case 'deadline_question':
+        if (state.deadline.trim()) {
+          setState(prev => ({ ...prev, currentStep: state.currentStep + 1 }))
+        }
+        break
+      case 'motivation_question':
+        if (state.motivation.trim()) {
+          setState(prev => ({ ...prev, currentStep: state.currentStep + 1 }))
+        }
+        break
+      case 'current_progress_question':
+        if (state.currentProgress.trim()) {
+          setState(prev => ({ ...prev, currentStep: state.currentStep + 1 }))
+        }
+        break
+      case 'obstacles_question':
+        if (state.obstacles.trim()) {
+          setState(prev => ({ ...prev, currentStep: state.currentStep + 1 }))
+        }
+        break
+      case 'daily_success_question':
+        if (state.dailySuccess.trim()) {
+          setState(prev => ({ ...prev, currentStep: state.currentStep + 1 }))
+        }
+        break
+      case 'time_commitment_question':
+        if (state.timeCommitment.trim()) {
+          setState(prev => ({ ...prev, currentStep: state.currentStep + 1 }))
+        }
+        break
+      case 'best_time_question':
+        if (state.bestTimeOfDay.trim()) {
+          setState(prev => ({ ...prev, currentStep: state.currentStep + 1 }))
+        }
+        break
+      case 'support_question':
+        if (state.supportNeeded.trim()) {
+          setState(prev => ({ ...prev, currentStep: state.currentStep + 1 }))
+        }
+        break
+      case 'celebration_question':
+        if (state.celebration.trim()) {
+          // This is the final question - start background goal creation process
+          createGoalInBackground(state.goal.trim(), state.motivation.trim())
+          // Set a completion flag to trigger redirect
+          setState(prev => ({ ...prev, backgroundProcessStatus: 'generating-steps' }))
+        }
+        break
+      default:
+        // For non-input steps, just advance
+        if (state.currentStep < goalCreationSteps.length - 1) {
+          setState(prev => ({ ...prev, currentStep: state.currentStep + 1 }))
+        }
+        break
     }
   }, [state, createGoalInBackground])
 
   // Auto-advance for non-input steps (but not the final step)
   const shouldAutoAdvance = useCallback(() => {
-    const inputSteps = [1, 3, 4] // questions_time (reason), goal_setup, notification_time
+    const currentStepData = goalCreationSteps[state.currentStep]
+    const stepId = currentStepData?.id
+    
+    // Input steps that require user interaction
+    const inputStepIds = [
+      'goal_question',
+      'deadline_question', 
+      'motivation_question',
+      'current_progress_question',
+      'obstacles_question',
+      'daily_success_question',
+      'time_commitment_question',
+      'best_time_question',
+      'support_question',
+      'celebration_question'
+    ]
+    
     const finalStep = goalCreationSteps.length - 1 // Don't auto-advance the final step
     return state.currentStep >= 0 && 
-           !inputSteps.includes(state.currentStep) && 
+           !inputStepIds.includes(stepId) && 
            state.currentStep !== finalStep
   }, [state.currentStep])
 
@@ -328,7 +570,23 @@ export function useGoalCreationFlow() {
       profile?.first_name || undefined
     ),
     currentStepData: goalCreationSteps[state.currentStep],
-    isInputStep: [1, 3, 4].includes(state.currentStep), // questions_time, goal_setup, notification_time
+    isInputStep: (() => {
+      const currentStepData = goalCreationSteps[state.currentStep]
+      const stepId = currentStepData?.id
+      const inputStepIds = [
+        'goal_question',
+        'deadline_question', 
+        'motivation_question',
+        'current_progress_question',
+        'obstacles_question',
+        'daily_success_question',
+        'time_commitment_question',
+        'best_time_question',
+        'support_question',
+        'celebration_question'
+      ]
+      return inputStepIds.includes(stepId)
+    })(),
     isLastStep: state.currentStep === goalCreationSteps.length - 1,
     profile,
     goalCreationStatus

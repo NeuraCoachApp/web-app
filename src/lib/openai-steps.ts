@@ -6,11 +6,20 @@ const openai = new OpenAI({
   dangerouslyAllowBrowser: true // This is needed for client-side usage
 })
 
+export interface GeneratedTask {
+  text: string
+  day_number: number
+  is_preparation?: boolean
+  success_criteria: string
+}
+
 export interface GeneratedStep {
   text: string
   order: number
   estimated_duration_days: number
   description?: string
+  success_criteria?: string
+  daily_tasks: GeneratedTask[]
 }
 
 export interface OpenAIStepsResponse {
@@ -66,6 +75,34 @@ function isStepSpecific(stepText: string): boolean {
 }
 
 /**
+ * Retry function with exponential backoff for rate limiting
+ */
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  maxRetries: number = 3,
+  baseDelay: number = 1000
+): Promise<T> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn()
+    } catch (error: any) {
+      // If it's a rate limit error (429) and we have retries left
+      if (error?.status === 429 && attempt < maxRetries) {
+        const delay = baseDelay * Math.pow(2, attempt) + Math.random() * 1000
+        console.log(`🔄 [OpenAI] Rate limited. Retrying in ${Math.round(delay)}ms (attempt ${attempt + 1}/${maxRetries + 1})`)
+        await new Promise(resolve => setTimeout(resolve, delay))
+        continue
+      }
+      
+      // If it's not a rate limit error or we're out of retries, throw
+      throw error
+    }
+  }
+  
+  throw new Error('Max retries exceeded')
+}
+
+/**
  * Generate structured steps for a goal using OpenAI
  */
 export async function generateGoalSteps(
@@ -73,96 +110,91 @@ export async function generateGoalSteps(
   userReason?: string
 ): Promise<OpenAIStepsResponse> {
   try {
-    const systemPrompt = `You are a professional life coach and goal-setting expert. Your task is to break down user goals into actionable, achievable steps with SPECIFIC, MEASURABLE actions.
+    const systemPrompt = `You are a professional life coach and goal-setting expert. Your task is to break down user goals into MILESTONES with DAILY TASKS.
 
 CRITICAL REQUIREMENTS:
-1. Generate 3-7 steps maximum (prefer 4-5 steps for most goals)
-2. Each step MUST have a CLEAR COMPLETION CONDITION - it ends when a specific target is achieved
-3. Steps should be finite tasks, NOT ongoing habits or daily routines
-4. Include specific numbers and measurable targets that define completion
-5. Steps should build upon each other logically
-6. Estimate realistic timeframes for each step
-7. Use encouraging, supportive language
-8. Consider the user's motivation/reason if provided
+1. Generate 3-7 milestones maximum (prefer 4-5 milestones for most goals)
+2. Each milestone MUST have a CLEAR COMPLETION CONDITION
+3. Each milestone must be broken down into DAILY TASKS (1 task per day)
+4. Each daily task must be accomplishable in a single day
+5. Daily tasks should be specific, actionable, and measurable
+6. Include preparation tasks (research, setup, discovery) before execution tasks
+7. Tasks should build logically toward completing the milestone
 
-COMPLETION-BASED REQUIREMENTS:
-- Each step must answer: "What specific achievement marks this step as DONE?"
-- Use precise completion verbs: "Complete", "Finish", "Reach", "Build", "Create", "Record"
-- Include concrete, countable targets: "Read 3 books" not "Read daily"
-- Set finite, measurable goals: "Learn 100 vocabulary words" not "Learn vocabulary daily"
-- Define exact end states: "Lose 10 pounds" not "Exercise regularly"
-- Avoid vague terms: "master", "improve", "get better", "understand"
-- Avoid ongoing words: "daily", "regularly", "consistently", "every day"
-- Be binary: Either DONE or NOT DONE - no subjective interpretation
+DAILY TASK REQUIREMENTS:
+- ONE ACTION PER TASK - no compound actions
+- ACCOMPLISHABLE IN ONE DAY - no multi-day tasks
+- SPECIFIC AND CONCRETE - avoid vague language
+- MEASURABLE OUTCOME - clear success criteria
+- SEQUENTIAL LOGIC - each task builds toward the milestone
 
 RESPONSE FORMAT:
 Return a JSON object with this exact structure:
 {
   "steps": [
     {
-      "text": "Specific, measurable step with numbers (50-120 characters)",
+      "text": "Milestone title (50-120 characters)",
       "order": 1,
       "estimated_duration_days": 7,
-      "description": "Detailed description explaining the measurable target and how to track it"
+      "description": "What this milestone achieves overall",
+      "success_criteria": "How to know this milestone is 100% complete",
+      "daily_tasks": [
+        {
+          "text": "Single actionable task for one day",
+          "day_number": 1,
+          "is_preparation": true,
+          "success_criteria": "Exact completion criteria for this task"
+        },
+        {
+          "text": "Another single actionable task",
+          "day_number": 2,
+          "is_preparation": false,
+          "success_criteria": "Exact completion criteria for this task"
+        }
+      ]
     }
   ],
   "total_estimated_duration_days": 30,
   "goal_summary": "Brief restatement of the goal in coaching language"
 }
 
-STEP GUIDELINES:
-- Every step must answer: "How much?", "How often?", "How many?", or "For how long?"
-- Include tracking mechanisms where possible
-- Duration should be realistic (typically 3-21 days per step)
-- Order steps logically from preparation to execution to mastery
-- Make success criteria crystal clear
+DAILY TASK EXAMPLES:
 
-COMPLETION-BASED vs HABIT-BASED EXAMPLES:
+EXAMPLE 1 - Sleep Goal:
+Milestone: "Complete 5 nights of uninterrupted 8-hour sleep"
+Daily Tasks:
+- Day 1: "Research and download a sleep tracking app" (preparation)
+- Day 2: "Set up bedroom for optimal sleep (blackout curtains, temperature)" (preparation)  
+- Day 3: "Record first night of 8-hour sleep without interruption"
+- Day 4: "Record second night of 8-hour sleep without interruption"
+- Day 5: "Record third night of 8-hour sleep without interruption"
+- Day 6: "Record fourth night of 8-hour sleep without interruption"
+- Day 7: "Record fifth night of 8-hour sleep without interruption"
 
-BAD (Ongoing Habit): "Exercise for 30 minutes daily"
-GOOD (Clear Completion): "Complete 20 gym workouts of 45 minutes each"
+EXAMPLE 2 - Fitness Goal:
+Milestone: "Complete baseline fitness assessment"
+Daily Tasks:
+- Day 1: "Find and book appointment with fitness trainer or gym"
+- Day 2: "Complete body weight and measurements recording"
+- Day 3: "Complete cardiovascular endurance test (1-mile walk/run time)"
 
-BAD (Ongoing Habit): "Meditate for 10 minutes every morning"
-GOOD (Clear Completion): "Complete 20 meditation sessions of 10 minutes each"
+Milestone: "Complete 10 gym workouts with proper form"
+Daily Tasks:
+- Day 1: "Complete first gym workout focusing on proper form"
+- Day 2: "Rest day - review workout notes and plan next session"
+- Day 3: "Complete second gym workout focusing on proper form"
+- Day 4: "Complete third gym workout focusing on proper form"
+- [continues for each workout day]
 
-BAD (Vague): "Master 300 Spanish vocabulary words"
-GOOD (Clear Completion): "Score 90% on a 300-word Spanish vocabulary test"
+BAD DAILY TASK EXAMPLES:
+❌ "Track sleep for 5 nights and optimize bedroom setup" (multiple actions)
+❌ "Research apps, set up bedroom, and start tracking sleep" (compound task)
+❌ "Maintain consistent sleep schedule throughout the week" (ongoing habit)
 
-BAD (Ongoing Habit): "Save $200 per month"
-GOOD (Clear Completion): "Reach $2,000 in savings account balance"
-
-BAD (Vague): "Establish meal prep routine with 15 recipes mastered"
-GOOD (Clear Completion): "Cook 15 healthy recipes successfully without recipe reference"
-
-BAD (Ongoing Habit): "Walk 10,000 steps daily"
-GOOD (Clear Completion): "Complete a 5K run in under 30 minutes"
-
-BAD (Vague): "Improve guitar skills"
-GOOD (Clear Completion): "Record yourself playing 3 songs without mistakes"
-
-COMPLETE EXAMPLES:
-
-Goal: "Get fit and lose weight"
-Steps:
-1. "Record baseline measurements: weight, body fat %, and 1-mile walk time" (7 days)
-2. "Complete 16 gym sessions (documented with workout logs)" (21 days)
-3. "Cook 12 healthy recipes under 500 calories without reference" (14 days)
-4. "Reach target weight loss of 10 pounds (verified by scale)" (42 days)
-5. "Complete a 5K run in under 30 minutes (timed and recorded)" (28 days)
-
-Goal: "Learn to play guitar"
-Steps:
-1. "Play 8 basic chords (G, C, D, Em, Am, F, E, A) with clean sound for 30 seconds each" (14 days)
-2. "Play 5 complete songs from memory without stopping" (21 days)
-3. "Perform 3 fingerpicking patterns at 60 BPM with metronome" (21 days)
-4. "Record yourself playing 3 songs with zero mistakes" (14 days)
-
-Goal: "Start a side business"
-Steps:
-1. "Complete 50 customer interviews and document 3 validated business ideas" (21 days)
-2. "Build working MVP and collect feedback from 20 test users" (28 days)
-3. "Generate $1,000 in revenue with 10 paying customers (receipts documented)" (35 days)
-4. "Reach $500 monthly recurring revenue for 2 consecutive months" (42 days)`
+GOOD DAILY TASK EXAMPLES:
+✅ "Download and set up Sleep Cycle app on phone"
+✅ "Install blackout curtains in bedroom"  
+✅ "Record tonight's sleep duration and quality in app"`
 
     const userPrompt = `Please break down this goal into actionable steps:
 
@@ -173,16 +205,18 @@ Generate a structured plan that will help the user achieve this goal successfull
 
     console.log('🤖 [OpenAI] Generating steps for goal:', goalText)
     
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt }
-      ],
-      temperature: 0.7,
-      max_tokens: 1500,
-      response_format: { type: "json_object" }
-    })
+    const completion = await retryWithBackoff(async () => {
+      return await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 1500,
+        response_format: { type: "json_object" }
+      })
+    }, 3, 2000) // 3 retries, starting with 2 second delay
 
     const responseContent = completion.choices[0]?.message?.content
     if (!responseContent) {
@@ -215,6 +249,28 @@ Generate a structured plan that will help the user achieve this goal successfull
         throw new Error(`Invalid step ${index + 1}: missing or invalid duration`)
       }
       
+      // Validate daily_tasks array
+      if (!step.daily_tasks || !Array.isArray(step.daily_tasks)) {
+        throw new Error(`Invalid step ${index + 1}: missing or invalid daily_tasks array`)
+      }
+      
+      if (step.daily_tasks.length === 0) {
+        throw new Error(`Invalid step ${index + 1}: no daily tasks provided`)
+      }
+      
+      // Validate each daily task
+      step.daily_tasks.forEach((task, taskIndex) => {
+        if (!task.text || typeof task.text !== 'string') {
+          throw new Error(`Invalid step ${index + 1}, task ${taskIndex + 1}: missing or invalid text`)
+        }
+        if (typeof task.day_number !== 'number' || task.day_number < 1) {
+          throw new Error(`Invalid step ${index + 1}, task ${taskIndex + 1}: missing or invalid day_number`)
+        }
+        if (!task.success_criteria || typeof task.success_criteria !== 'string') {
+          throw new Error(`Invalid step ${index + 1}, task ${taskIndex + 1}: missing or invalid success_criteria`)
+        }
+      })
+      
       // Validate specificity - check for measurable elements
       if (!isStepSpecific(step.text)) {
         console.warn(`⚠️ [OpenAI] Step ${index + 1} may lack specificity: "${step.text}"`)
@@ -228,7 +284,12 @@ Generate a structured plan that will help the user achieve this goal successfull
     console.log('✅ [OpenAI] Successfully generated steps:', {
       stepCount: parsedResponse.steps.length,
       totalDuration: parsedResponse.total_estimated_duration_days,
-      steps: parsedResponse.steps.map(s => ({ text: s.text, duration: s.estimated_duration_days }))
+      steps: parsedResponse.steps.map(s => ({ 
+        milestone: s.text, 
+        duration: s.estimated_duration_days,
+        dailyTaskCount: s.daily_tasks.length,
+        tasks: s.daily_tasks.map(t => ({ day: t.day_number, text: t.text }))
+      }))
     })
 
     return parsedResponse

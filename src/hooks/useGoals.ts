@@ -407,8 +407,11 @@ export function useGoals(userId?: string) {
     
     // Mutations
     createGoal: createGoalMutation.mutate,
+    createGoalAsync: createGoalMutation.mutateAsync,
     createMilestone: createMilestoneMutation.mutate,
+    createMilestoneAsync: createMilestoneMutation.mutateAsync,
     createTask: createTaskMutation.mutate,
+    createTaskAsync: createTaskMutation.mutateAsync,
     updateTaskCompletion: updateTaskCompletionMutation.mutate,
     
     // Mutation states

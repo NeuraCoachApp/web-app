@@ -1,6 +1,4 @@
 export { GoalCreationProvider, useGoalCreationContext } from './GoalCreationProvider'
 export { GoalCreationFlow } from './GoalCreationFlow'
-export { ReasonInputStep } from './ReasonInputStep'
-export { GoalInputStep } from './GoalInputStep'
-export { NotificationInputStep } from './NotificationInputStep'
+export { ComprehensiveInputStep } from './ComprehensiveInputStep'
 export { TextOnlyStep } from './TextOnlyStep'

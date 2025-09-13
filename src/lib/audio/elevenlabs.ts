@@ -28,8 +28,8 @@ class ElevenLabsService {
     this.modelId = config.modelId || 'eleven_monolingual_v1'
   }
 
-  async synthesize(options: SynthesizeOptions): Promise<ArrayBuffer> {
-    const { text, voiceSettings = {} } = options
+  async synthesize(options: SynthesizeOptions & { onRetry?: (attempt: number, delay: number) => void }): Promise<ArrayBuffer> {
+    const { text, voiceSettings = {}, onRetry } = options
 
     const defaultVoiceSettings = {
       stability: 0.75, // Increased for more measured speech
@@ -39,26 +39,62 @@ class ElevenLabsService {
       ...voiceSettings
     }
 
-    const response = await fetch(`${this.baseUrl}/text-to-speech/${this.voiceId}`, {
-      method: 'POST',
-      headers: {
-        'Accept': 'audio/mpeg',
-        'Content-Type': 'application/json',
-        'xi-api-key': this.apiKey
-      },
-      body: JSON.stringify({
-        text,
-        model_id: this.modelId,
-        voice_settings: defaultVoiceSettings
+    return await this.retryWithBackoff(async () => {
+      const response = await fetch(`${this.baseUrl}/text-to-speech/${this.voiceId}`, {
+        method: 'POST',
+        headers: {
+          'Accept': 'audio/mpeg',
+          'Content-Type': 'application/json',
+          'xi-api-key': this.apiKey
+        },
+        body: JSON.stringify({
+          text,
+          model_id: this.modelId,
+          voice_settings: defaultVoiceSettings
+        })
       })
-    })
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(`ElevenLabs API error: ${response.status} - ${errorText}`)
+      if (!response.ok) {
+        const errorText = await response.text()
+        throw new Error(`ElevenLabs API error: ${response.status} - ${errorText}`)
+      }
+
+      return await response.arrayBuffer()
+    }, onRetry)
+  }
+
+  private async retryWithBackoff<T>(
+    fn: () => Promise<T>,
+    onRetry?: (attempt: number, delay: number) => void,
+    maxRetries: number = 3,
+    baseDelay: number = 5000
+  ): Promise<T> {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        return await fn()
+      } catch (error: any) {
+        // Check if it's a rate limit error (429)
+        const is429Error = error?.message?.includes('429') || error?.status === 429
+        
+        if (is429Error && attempt < maxRetries) {
+          const delay = baseDelay * Math.pow(2, attempt) + Math.random() * 1000 // Exponential backoff with jitter
+          console.log(`🔄 [ElevenLabs] Rate limited. Retrying in ${Math.round(delay)}ms (attempt ${attempt + 1}/${maxRetries + 1})`)
+          
+          // Notify the UI about the retry
+          if (onRetry) {
+            onRetry(attempt + 1, delay)
+          }
+          
+          await new Promise(resolve => setTimeout(resolve, delay))
+          continue
+        }
+        
+        // If it's not a rate limit error or we're out of retries, throw
+        throw error
+      }
     }
-
-    return await response.arrayBuffer()
+    
+    throw new Error('Max retries exceeded')
   }
 
   async getVoices() {
@@ -185,11 +221,6 @@ function getCurrentWordIndex(currentTime: number, duration: number, wordCount: n
   const adjustedProgress = Math.min(1, progress + leadTime)
   const wordIndex = Math.floor(adjustedProgress * wordCount)
   
-  // Add some debug logging to help troubleshoot
-  if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-    console.log(`Audio progress: ${currentTime.toFixed(2)}/${duration.toFixed(2)} (${(progress * 100).toFixed(1)}%) -> word ${wordIndex}/${wordCount}`)
-  }
-  
   return Math.min(Math.max(0, wordIndex), wordCount - 1)
 }
 
@@ -201,7 +232,7 @@ function splitTextIntoWords(text: string): string[] {
 
 // Hook for using voice synthesis in React components
 export function useVoiceSynthesis() {
-  const synthesizeText = async (text: string, useCache: boolean = true): Promise<HTMLAudioElement> => {
+  const synthesizeText = async (text: string, useCache: boolean = true, onRetry?: (attempt: number, delay: number) => void): Promise<HTMLAudioElement> => {
     try {
       // Check cache first if enabled
       if (useCache) {
@@ -215,7 +246,7 @@ export function useVoiceSynthesis() {
       }
 
       const service = getElevenLabsService()
-      const audioBuffer = await service.synthesize({ text })
+      const audioBuffer = await service.synthesize({ text, onRetry })
       
       // Convert ArrayBuffer to audio element
       const blob = new Blob([audioBuffer], { type: 'audio/mpeg' })
@@ -278,15 +309,15 @@ export function useVoiceSynthesis() {
 
   const playTextWithProgress = async (
     text: string,
-    callbacks: SpeechProgressCallbacks = {}
+    callbacks: SpeechProgressCallbacks & { onRetry?: (attempt: number, delay: number) => void } = {}
   ): Promise<HTMLAudioElement> => {
-    const { onPreparing, onStart, onProgress, onEnd, onError } = callbacks
+    const { onPreparing, onStart, onProgress, onEnd, onError, onRetry } = callbacks
 
     try {
       // Notify that we're preparing the speech
       onPreparing?.()
       
-      const audio = await synthesizeText(text)
+      const audio = await synthesizeText(text, true, onRetry)
       
       // Set up event listeners
       const handleLoadedMetadata = () => {
