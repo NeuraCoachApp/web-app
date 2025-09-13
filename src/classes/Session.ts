@@ -1,4 +1,4 @@
-import { Tables } from '@/src/types/database'
+import { Tables, Database } from '@/src/types/database'
 import { Goal } from './Goal'
 
 export class Session {
@@ -10,7 +10,7 @@ export class Session {
   public mood: number
   public motivation: number
   public blocker: string
-  public completion: any[] // JSON array
+  public completion: Database["public"]["CompositeTypes"]["task_completion"][] // Array of task completion objects
   private _goal?: Goal
 
   constructor(data: Tables<'session'>) {
@@ -22,7 +22,7 @@ export class Session {
     this.mood = data.mood
     this.motivation = data.motivation
     this.blocker = data.blocker
-    this.completion = Array.isArray(data.completion) ? data.completion : []
+    this.completion = data.completion || []
   }
 
   /**
@@ -87,6 +87,76 @@ export class Session {
    */
   getCompletionItemsCount(): number {
     return this.completion.length
+  }
+
+  /**
+   * Get count of completed tasks
+   */
+  getCompletedTasksCount(): number {
+    return this.completion.filter(item => item.iscompleted === true).length
+  }
+
+  /**
+   * Get count of incomplete tasks
+   */
+  getIncompleteTasksCount(): number {
+    return this.completion.filter(item => item.iscompleted !== true).length
+  }
+
+  /**
+   * Get completion percentage (0-100)
+   */
+  getCompletionPercentage(): number {
+    if (this.completion.length === 0) return 0
+    return Math.round((this.getCompletedTasksCount() / this.completion.length) * 100)
+  }
+
+  /**
+   * Check if a specific task is completed
+   */
+  isTaskCompleted(taskUuid: string): boolean {
+    const task = this.completion.find(item => item.task_uuid === taskUuid)
+    return task?.iscompleted === true
+  }
+
+  /**
+   * Get all completed task UUIDs
+   */
+  getCompletedTaskUuids(): string[] {
+    return this.completion
+      .filter(item => item.iscompleted === true)
+      .map(item => item.task_uuid)
+      .filter((uuid): uuid is string => uuid !== null)
+  }
+
+  /**
+   * Get all incomplete task UUIDs
+   */
+  getIncompleteTaskUuids(): string[] {
+    return this.completion
+      .filter(item => item.iscompleted !== true)
+      .map(item => item.task_uuid)
+      .filter((uuid): uuid is string => uuid !== null)
+  }
+
+  /**
+   * Add or update a task completion status
+   */
+  setTaskCompletion(taskUuid: string, isCompleted: boolean): void {
+    const existingIndex = this.completion.findIndex(item => item.task_uuid === taskUuid)
+    
+    if (existingIndex >= 0) {
+      this.completion[existingIndex].iscompleted = isCompleted
+    } else {
+      this.completion.push({ task_uuid: taskUuid, iscompleted: isCompleted })
+    }
+  }
+
+  /**
+   * Remove a task from completion tracking
+   */
+  removeTaskCompletion(taskUuid: string): void {
+    this.completion = this.completion.filter(item => item.task_uuid !== taskUuid)
   }
 
   /**

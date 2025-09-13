@@ -108,7 +108,9 @@ export type Database = {
       session: {
         Row: {
           blocker: string
-          completion: Json[]
+          completion:
+            | Database["public"]["CompositeTypes"]["task_completion"][]
+            | null
           created_at: string
           goal_uuid: string
           mood: number
@@ -119,7 +121,9 @@ export type Database = {
         }
         Insert: {
           blocker?: string
-          completion: Json[]
+          completion?:
+            | Database["public"]["CompositeTypes"]["task_completion"][]
+            | null
           created_at?: string
           goal_uuid?: string
           mood?: number
@@ -130,7 +134,9 @@ export type Database = {
         }
         Update: {
           blocker?: string
-          completion?: Json[]
+          completion?:
+            | Database["public"]["CompositeTypes"]["task_completion"][]
+            | null
           created_at?: string
           goal_uuid?: string
           mood?: number
@@ -269,7 +275,10 @@ export type Database = {
       [_ in never]: never
     }
     CompositeTypes: {
-      [_ in never]: never
+      task_completion: {
+        task_uuid: string | null
+        iscompleted: boolean | null
+      }
     }
   }
 }

@@ -278,7 +278,7 @@ export function generateMockGoalData(userId: string): { success: boolean; data?:
             mood: randomBetween(5, 9),
             motivation: randomBetween(5, 9),
             blocker: Math.random() < 0.3 ? "Had some challenges but pushed through" : "",
-            completion: isCompleted ? [taskText] : []
+            completion: isCompleted ? [{ task_uuid: task.uuid, iscompleted: true }] : []
           })
           
           session.setGoal(goal)
@@ -406,7 +406,7 @@ export async function generateMockDataForCurrentUser(): Promise<{ success: boole
               mood: Math.floor(Math.random() * 5) + 5, // 5-9
               motivation: Math.floor(Math.random() * 5) + 5, // 5-9
               blocker: Math.random() < 0.3 ? "Had some challenges but pushed through" : "",
-              completion: taskData.isCompleted ? [taskText] : [],
+              completion: taskData.isCompleted ? [{ task_uuid: taskData.uuid, iscompleted: true }] : [],
               created_at: sessionDate.toISOString()
             })
         }
