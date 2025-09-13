@@ -42,8 +42,8 @@ export function FlowInput({
   const { hasVoiceEnabled } = useCoach()
 
   const baseInputClasses = "w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-  const textareaClasses = `${baseInputClasses} resize-none`
-  const textInputClasses = `${baseInputClasses} ${showVoiceButton && hasVoiceEnabled ? 'pr-12' : ''}`
+  const textareaClasses = `${baseInputClasses} resize-none ${showVoiceButton && hasVoiceEnabled && onVoiceTranscript ? 'pr-12' : ''}`
+  const textInputClasses = `${baseInputClasses} ${showVoiceButton && hasVoiceEnabled && onVoiceTranscript ? 'pr-12' : ''}`
 
   return (
     <div className={`space-y-4 ${className}`}>
@@ -73,8 +73,8 @@ export function FlowInput({
         )}
         
         {/* Voice Input Button */}
-        {showVoiceButton && hasVoiceEnabled && onVoiceTranscript && type === 'text' && (
-          <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
+        {showVoiceButton && hasVoiceEnabled && onVoiceTranscript && (
+          <div className={`absolute right-2 ${type === 'textarea' ? 'top-3' : 'top-1/2 transform -translate-y-1/2'}`}>
             <VoiceInput
               onTranscript={onVoiceTranscript}
               onError={onError}

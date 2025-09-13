@@ -34,7 +34,7 @@ const tabs = [
 
 export default function DashboardTabs({ activeTab, onTabChange, hasGoals }: DashboardTabsProps) {
   return (
-    <div className="bg-background border-b border-border">
+    <div className="bg-background">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex space-x-8">
           {tabs.map((tab) => {

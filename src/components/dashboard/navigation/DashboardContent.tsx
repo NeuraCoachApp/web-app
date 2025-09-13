@@ -64,7 +64,7 @@ export default function DashboardContent({
 
       case 'milestones':
         return (
-          <div className="bg-card">
+          <div className="bg-card mt-8">
             <GoalTimeline 
               goals={goals} 
               selectedGoalIndex={selectedGoalIndex}

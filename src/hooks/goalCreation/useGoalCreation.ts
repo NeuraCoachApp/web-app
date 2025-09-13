@@ -6,6 +6,7 @@ import { useGoals } from '../useGoals'
 import { Tables } from '@/src/types/database'
 import { Goal, Milestone, Task } from '@/src/classes'
 import { generateGoalSteps, validateOpenAIConfiguration, GeneratedStep } from '@/src/lib/openai-steps'
+import { useSpeechRecognition } from '@/src/lib/audio/speech-recognition'
 
 export interface GoalCreationStep {
   id: string
@@ -212,6 +213,7 @@ export function useGoalCreationFlow() {
   const { data: profile } = useProfile(user?.id)
   const { data: goalCreationStatus } = useGoalCreationStatus(user?.id)
   const { createGoalAsync, createMilestoneAsync, createTaskAsync } = useGoals(user?.id)
+  const { extractName } = useSpeechRecognition()
 
   // State management
   const [state, setState] = useState<GoalCreationState>({
@@ -453,6 +455,79 @@ Celebration Plan: ${state.celebration}
     }
   }, [user, createGoalAsync, createMilestoneAsync, createTaskAsync, generateSteps, state])
 
+  // Handle voice transcript for any input step
+  const handleVoiceTranscript = useCallback(async (transcript: string, isFinal: boolean, stepId: string) => {
+    if (!isFinal) {
+      // For real-time transcription, update the appropriate field based on stepId
+      setState(prev => {
+        switch (stepId) {
+          case 'goal_question':
+            return { ...prev, goal: transcript }
+          case 'deadline_question':
+            return { ...prev, deadline: transcript }
+          case 'motivation_question':
+            return { ...prev, motivation: transcript }
+          case 'current_progress_question':
+            return { ...prev, currentProgress: transcript }
+          case 'obstacles_question':
+            return { ...prev, obstacles: transcript }
+          case 'daily_success_question':
+            return { ...prev, dailySuccess: transcript }
+          case 'time_commitment_question':
+            return { ...prev, timeCommitment: transcript }
+          case 'best_time_question':
+            return { ...prev, bestTimeOfDay: transcript }
+          case 'support_question':
+            return { ...prev, supportNeeded: transcript }
+          case 'celebration_question':
+            return { ...prev, celebration: transcript }
+          default:
+            return prev
+        }
+      })
+      return
+    }
+
+    // Clear any previous speech errors
+    setState(prev => ({ ...prev, speechError: '' }))
+    
+    try {
+      // For final transcription, just update the field directly
+      setState(prev => {
+        switch (stepId) {
+          case 'goal_question':
+            return { ...prev, goal: transcript.trim() }
+          case 'deadline_question':
+            return { ...prev, deadline: transcript.trim() }
+          case 'motivation_question':
+            return { ...prev, motivation: transcript.trim() }
+          case 'current_progress_question':
+            return { ...prev, currentProgress: transcript.trim() }
+          case 'obstacles_question':
+            return { ...prev, obstacles: transcript.trim() }
+          case 'daily_success_question':
+            return { ...prev, dailySuccess: transcript.trim() }
+          case 'time_commitment_question':
+            return { ...prev, timeCommitment: transcript.trim() }
+          case 'best_time_question':
+            return { ...prev, bestTimeOfDay: transcript.trim() }
+          case 'support_question':
+            return { ...prev, supportNeeded: transcript.trim() }
+          case 'celebration_question':
+            return { ...prev, celebration: transcript.trim() }
+          default:
+            return prev
+        }
+      })
+    } catch (error) {
+      console.error('Voice transcript error:', error)
+      setState(prev => ({ 
+        ...prev, 
+        speechError: 'There was an error processing your voice input. Please try again.' 
+      }))
+    }
+  }, [])
+
   // Handle next step logic for goal creation flow
   const handleNext = useCallback(async () => {
     const currentStepData = goalCreationSteps[state.currentStep]
@@ -562,6 +637,7 @@ Celebration Plan: ${state.celebration}
     setCurrentStep,
     initializeStep,
     handleNext,
+    handleVoiceTranscript,
     shouldAutoAdvance,
     generateSteps,
     createGoalInBackground,

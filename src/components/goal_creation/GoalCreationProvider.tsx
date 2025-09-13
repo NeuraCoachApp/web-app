@@ -12,6 +12,7 @@ interface GoalCreationContextType {
   updateState: (updates: Partial<GoalCreationState>) => void
   setCurrentStep: (step: number) => void
   handleNext: () => Promise<void>
+  handleVoiceTranscript: (transcript: string, isFinal: boolean, stepId: string) => Promise<void>
   shouldAutoAdvance: () => boolean
   getCurrentText: () => string
   currentStepData: GoalCreationStep

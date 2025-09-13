@@ -24,7 +24,7 @@ export function ComprehensiveInputStep({
   options,
   buttonText = 'Continue'
 }: ComprehensiveInputStepProps) {
-  const { handleNext } = useGoalCreationContext()
+  const { handleNext, handleVoiceTranscript, state } = useGoalCreationContext()
   const { isSpeaking, isPreparingSpeech } = useCoach()
   const [showInput, setShowInput] = useState(false)
 
@@ -48,6 +48,11 @@ export function ComprehensiveInputStep({
       e.preventDefault()
       handleNext()
     }
+  }
+
+  // Voice transcript handler for this specific step
+  const handleStepVoiceTranscript = async (transcript: string, isFinal: boolean) => {
+    await handleVoiceTranscript(transcript, isFinal, stepId)
   }
 
   const renderInput = () => {
@@ -86,8 +91,12 @@ export function ComprehensiveInputStep({
             type="text"
             value={value}
             onChange={handleInputChange}
+            onVoiceTranscript={handleStepVoiceTranscript}
             onKeyDown={handleKeyPress}
             placeholder={placeholder}
+            voicePlaceholder={`Say your response for: ${placeholder}`}
+            speechError={state.speechError}
+            onError={(error) => console.error('Voice input error:', error)}
             showVoiceButton={true}
             autoFocus
           />
@@ -100,8 +109,12 @@ export function ComprehensiveInputStep({
             type="textarea"
             value={value}
             onChange={handleInputChange}
+            onVoiceTranscript={handleStepVoiceTranscript}
             onKeyDown={handleKeyPress}
             placeholder={placeholder}
+            voicePlaceholder={`Say your response for: ${placeholder}`}
+            speechError={state.speechError}
+            onError={(error) => console.error('Voice input error:', error)}
             showVoiceButton={true}
             autoFocus
             rows={3}
