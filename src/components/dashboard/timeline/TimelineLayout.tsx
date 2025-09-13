@@ -6,7 +6,7 @@ import { Goal } from '@/src/classes'
 export default function TimelineLayout({ children }: TimelineLayoutProps) {
   return (
     <div className="w-full">
-      <div className="mb-8">
+      <div className="my-8">
         {/* Horizontal Timeline Container */}
         <div className="relative overflow-x-auto py-32">
           <div className="flex items-center min-w-max px-8">

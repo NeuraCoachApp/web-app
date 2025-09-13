@@ -230,12 +230,16 @@ export function generateMockGoalData(userId: string): { success: boolean; data?:
     console.log('✅ Created mock goal:', goal.text)
 
     // Create milestones and tasks
+    // Start with the first milestone overlapping with today for better demo
     let currentDate = new Date(goalStartDate)
     
     goalTemplate.milestones.forEach((milestoneTemplate, milestoneIndex) => {
       // Create milestone
-      const milestoneStartDate = new Date(currentDate)
-      const milestoneEndDate = new Date(currentDate.getTime() + 30 * 24 * 60 * 60 * 1000) // 30 days duration
+      // First milestone should be active now, subsequent ones follow
+      const milestoneStartDate = milestoneIndex === 0 
+        ? getDateNDaysAgo(10) // Started 10 days ago, so it's currently active
+        : new Date(currentDate)
+      const milestoneEndDate = new Date(milestoneStartDate.getTime() + 30 * 24 * 60 * 60 * 1000) // 30 days duration
       
       const milestone = new Milestone({
         uuid: `milestone-${Date.now()}-${milestoneIndex}`,
@@ -248,8 +252,28 @@ export function generateMockGoalData(userId: string): { success: boolean; data?:
       // Create tasks for this milestone
       const milestoneTasks: Task[] = []
       milestoneTemplate.tasks.forEach((taskText, taskIndex) => {
-        const taskStartDate = new Date(milestoneStartDate.getTime() + taskIndex * 7 * 24 * 60 * 60 * 1000) // 7 days apart
-        const taskEndDate = new Date(taskStartDate.getTime() + 7 * 24 * 60 * 60 * 1000) // 7 days duration
+        // For the first milestone, create tasks that span around today
+        let taskStartDate: Date
+        let taskEndDate: Date
+        
+        if (milestoneIndex === 0) {
+          // Create tasks with different timeframes relative to today
+          const today = new Date()
+          const daysFromToday = [
+            -5, // Started 5 days ago, ends in 2 days (active)
+            -2, // Started 2 days ago, ends in 5 days (active)
+            -10, // Started 10 days ago, ended 3 days ago (overdue if not completed)
+            1   // Starts tomorrow, ends in 8 days (upcoming)
+          ]
+          
+          const dayOffset = daysFromToday[taskIndex % daysFromToday.length]
+          taskStartDate = new Date(today.getTime() + dayOffset * 24 * 60 * 60 * 1000)
+          taskEndDate = new Date(taskStartDate.getTime() + 7 * 24 * 60 * 60 * 1000) // 7 days duration
+        } else {
+          // For other milestones, use the original logic
+          taskStartDate = new Date(milestoneStartDate.getTime() + taskIndex * 7 * 24 * 60 * 60 * 1000) // 7 days apart
+          taskEndDate = new Date(taskStartDate.getTime() + 7 * 24 * 60 * 60 * 1000) // 7 days duration
+        }
         
         const isCompleted = Math.random() < 0.6 // 60% chance of completion
         

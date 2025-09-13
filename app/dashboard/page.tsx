@@ -8,8 +8,10 @@ import { useProfile } from '@/src/hooks/useProfile'
 import { useOnboardingRedirect } from '@/src/hooks/useOnboarding'
 import { useGoals, goalsKeys } from '@/src/hooks/useGoals'
 import { GoalTimeline, GoalInsights, GoalCalendar } from '@/src/components/dashboard'
+import { DailyTaskList } from '@/src/components/dashboard/daily'
 import MockDataGenerator from '@/src/components/dev/MockDataGenerator'
 import LoadingSpinner from '@/src/components/ui/loading-spinner'
+import { ThemeToggle } from '@/src/components/ui/theme-toggle'
 import { useQueryClient } from '@tanstack/react-query'
 import { Goal } from '@/src/classes/Goal'
 
@@ -91,6 +93,7 @@ export default function Dashboard() {
                 <User className="w-4 h-4" />
                 <span>{user.email}</span>
               </div>
+              <ThemeToggle />
               <button
                 onClick={handleSignOut}
                 className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -122,6 +125,37 @@ export default function Dashboard() {
             }}
           />
         )}
+      </div>
+
+      {/* Daily Task List */}
+      <div className="bg-background border-t border-border">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {goalsLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="flex flex-col items-center gap-4">
+                <LoadingSpinner size="md" className="text-primary" />
+                <div className="text-muted-foreground text-sm">Loading today's tasks...</div>
+              </div>
+            </div>
+          ) : (
+            <>
+              
+              <DailyTaskList 
+                goal={selectedGoal} 
+                onTaskToggle={(task) => {
+                  // Toggle the task completion status
+                  task.toggleCompletion()
+                  console.log('Task toggled:', task.text, 'completed:', task.isCompleted)
+                  
+                  // Force a re-render by invalidating the goals query
+                  if (user?.id) {
+                    queryClient.invalidateQueries({ queryKey: goalsKeys.user(user.id) })
+                  }
+                }}
+              />
+            </>
+          )}
+        </div>
       </div>
 
       {/* Goal Calendar - Progress tracking */}

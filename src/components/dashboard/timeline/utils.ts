@@ -1,5 +1,6 @@
 import { Goal } from '@/src/classes/Goal'
 import { Milestone } from '@/src/classes/Milestone'
+import { Task } from '@/src/classes/Task'
 
 export function determineCurrentMilestoneIndex(milestones: Milestone[]): number {
   if (milestones.length === 0) return -1
@@ -31,4 +32,48 @@ export function logTimelineDebugInfo(goals: Goal[], selectedGoalIndex: number, c
   )
   console.log('🎨 [GoalTimeline] Current milestone index:', currentMilestoneIndex)
   console.log('🎨 [GoalTimeline] All milestones completed:', allMilestonesCompleted)
+}
+
+/**
+ * Get tasks that are relevant for today based on their timeframes
+ * Returns tasks that are:
+ * 1. Currently active (today is within start_at and end_at)
+ * 2. Overdue (end_at has passed and task is not completed)
+ */
+export function getTodaysTasks(goal: Goal | null): Task[] {
+  if (!goal) return []
+  
+  const allTasks = goal.getTasks()
+  const todaysTasks = allTasks.filter(task => {
+    return task.isActive() || task.isOverdue()
+  })
+  
+  // Sort by priority: overdue first, then by start date
+  return todaysTasks.sort((a, b) => {
+    // Overdue tasks first
+    if (a.isOverdue() && !b.isOverdue()) return -1
+    if (!a.isOverdue() && b.isOverdue()) return 1
+    
+    // Then sort by start date (earlier first)
+    return a.getStartDate().getTime() - b.getStartDate().getTime()
+  })
+}
+
+/**
+ * Get tasks grouped by their status for today
+ */
+export function getTodaysTasksByStatus(goal: Goal | null): {
+  active: Task[]
+  overdue: Task[]
+  completed: Task[]
+} {
+  if (!goal) return { active: [], overdue: [], completed: [] }
+  
+  const todaysTasks = getTodaysTasks(goal)
+  
+  return {
+    active: todaysTasks.filter(task => task.isActive() && !task.isCompleted),
+    overdue: todaysTasks.filter(task => task.isOverdue()),
+    completed: todaysTasks.filter(task => task.isCompleted && (task.isActive() || task.isOverdue()))
+  }
 }
