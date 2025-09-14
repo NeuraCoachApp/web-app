@@ -3,7 +3,12 @@
 import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useCheckInContext } from './CheckInProvider'
-import { CheckCircle, Flame, TrendingUp, Calendar, ArrowRight } from 'lucide-react'
+import { CheckCircle, Flame, TrendingUp, Calendar, ArrowRight, Brain } from 'lucide-react'
+import { performIntelligentTaskAdjustment } from '@/src/lib/ai-task-adjustment'
+import { useQueryClient } from '@tanstack/react-query'
+import { goalsKeys } from '@/src/hooks/useGoals'
+import { checkInKeys } from '@/src/hooks/useCheckIn'
+import { useAuth } from '@/src/contexts/AuthContext'
 
 export function CheckInComplete() {
   const {
@@ -12,13 +17,22 @@ export function CheckInComplete() {
     checkInData,
     submitCheckIn,
     isSubmitting,
-    getProgressPercentage
+    getProgressPercentage,
+    todaysTasks
   } = useCheckInContext()
 
   const router = useRouter()
+  const queryClient = useQueryClient()
+  const { user } = useAuth()
   const [isComplete, setIsComplete] = useState(false)
   const [newStreak, setNewStreak] = useState(0)
   const [hasSubmitted, setHasSubmitted] = useState(false)
+  const [isAdjustingTasks, setIsAdjustingTasks] = useState(false)
+  const [adjustmentResult, setAdjustmentResult] = useState<{
+    adjustmentsMade: boolean
+    encouragementMessage: string
+    strategy: string
+  } | null>(null)
 
   useEffect(() => {
     if (!hasSubmitted) {
@@ -29,6 +43,7 @@ export function CheckInComplete() {
 
   const handleSubmitCheckIn = async () => {
     try {
+      // Step 1: Submit the check-in
       const result = await submitCheckIn()
       
       if (result.streak_updated) {
@@ -38,6 +53,50 @@ export function CheckInComplete() {
       }
       
       setIsComplete(true)
+      
+      // Step 2: Perform AI-powered task adjustment
+      if (selectedGoal && todaysTasks && checkInData.mood && checkInData.motivation) {
+        setIsAdjustingTasks(true)
+        
+        try {
+          console.log('🧠 [CheckInComplete] Starting AI task adjustment')
+          
+          const adjustmentResult = await performIntelligentTaskAdjustment(
+            selectedGoal.text,
+            todaysTasks,
+            {
+              mood: checkInData.mood,
+              motivation: checkInData.motivation,
+              progressPercentage: getProgressPercentage(),
+              blocker: checkInData.blocker || '',
+              summary: checkInData.summary || ''
+            }
+          )
+          
+          setAdjustmentResult(adjustmentResult)
+          
+          // Invalidate caches to refresh task data
+          if (user && adjustmentResult.adjustmentsMade) {
+            await queryClient.invalidateQueries({ queryKey: goalsKeys.user(user.id) })
+            await queryClient.invalidateQueries({ queryKey: checkInKeys.todaysTasks(selectedGoal.uuid) })
+            await queryClient.invalidateQueries({ queryKey: checkInKeys.dailyProgress(selectedGoal.uuid) })
+          }
+          
+          console.log('✅ [CheckInComplete] AI task adjustment completed:', adjustmentResult)
+          
+        } catch (error) {
+          console.error('❌ [CheckInComplete] Error in AI task adjustment:', error)
+          // Set fallback result so UI doesn't break
+          setAdjustmentResult({
+            adjustmentsMade: false,
+            encouragementMessage: "I'm here to support you. Tomorrow is a fresh start!",
+            strategy: "Continue with your current plan"
+          })
+        } finally {
+          setIsAdjustingTasks(false)
+        }
+      }
+      
     } catch (error) {
       console.error('Error submitting check-in:', error)
       // Handle error - could show error message
@@ -50,14 +109,19 @@ export function CheckInComplete() {
 
   const progressPercentage = getProgressPercentage()
 
-  if (isSubmitting || !isComplete) {
+  if (isSubmitting || !isComplete || isAdjustingTasks) {
     return (
       <div className="max-w-2xl mx-auto text-center space-y-6">
         <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary mx-auto"></div>
         <div>
-          <h2 className="text-2xl font-bold text-foreground mb-2">Completing Check-In</h2>
+          <h2 className="text-2xl font-bold text-foreground mb-2">
+            {isAdjustingTasks ? 'Optimizing Your Plan' : 'Completing Check-In'}
+          </h2>
           <p className="text-muted-foreground">
-            Saving your progress and updating your streak...
+            {isAdjustingTasks 
+              ? 'Analyzing your progress and adjusting tomorrow\'s tasks to better support your goals...'
+              : 'Saving your progress and updating your streak...'
+            }
           </p>
         </div>
       </div>
@@ -164,6 +228,44 @@ export function CheckInComplete() {
         <div className="bg-card/50 rounded-xl border border-border/50 p-6">
           <h3 className="text-lg font-semibold text-foreground mb-3">Working On:</h3>
           <p className="text-muted-foreground">{selectedGoal.text}</p>
+        </div>
+      )}
+
+      {/* AI Task Adjustment Results */}
+      {adjustmentResult && (
+        <div className={`rounded-xl border p-6 ${
+          adjustmentResult.adjustmentsMade 
+            ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'
+            : 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+        }`}>
+          <div className="flex items-center gap-3 mb-3">
+            <Brain className={`w-6 h-6 ${
+              adjustmentResult.adjustmentsMade ? 'text-blue-600' : 'text-green-600'
+            }`} />
+            <h3 className={`text-lg font-semibold ${
+              adjustmentResult.adjustmentsMade 
+                ? 'text-blue-800 dark:text-blue-200'
+                : 'text-green-800 dark:text-green-200'
+            }`}>
+              {adjustmentResult.adjustmentsMade ? 'Plan Optimized' : 'Plan Looks Great'}
+            </h3>
+          </div>
+          <div className="space-y-3">
+            <p className={`text-sm ${
+              adjustmentResult.adjustmentsMade 
+                ? 'text-blue-700 dark:text-blue-300'
+                : 'text-green-700 dark:text-green-300'
+            }`}>
+              <strong>Strategy:</strong> {adjustmentResult.strategy}
+            </p>
+            <p className={`text-sm ${
+              adjustmentResult.adjustmentsMade 
+                ? 'text-blue-700 dark:text-blue-300'
+                : 'text-green-700 dark:text-green-300'
+            }`}>
+              {adjustmentResult.encouragementMessage}
+            </p>
+          </div>
         </div>
       )}
 

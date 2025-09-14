@@ -30,12 +30,13 @@ export function VoiceCoachChat() {
     getProgressPercentage
   } = useCheckInContext()
 
-  const { speak, markUserInteracted, hasUserInteracted, isSpeaking, isPreparingSpeech } = useCoach()
+  const { speak, setPreviewMessage, markUserInteracted, hasUserInteracted, isSpeaking, isPreparingSpeech, previewMessage } = useCoach()
   
   const [conversation, setConversation] = useState<ConversationMessage[]>([])
   const [currentInput, setCurrentInput] = useState('')
   const [isProcessing, setIsProcessing] = useState(false)
   const [conversationComplete, setConversationComplete] = useState(false)
+  const [isCompletingConversation, setIsCompletingConversation] = useState(false)
   const [sessionSummary, setSessionSummary] = useState('')
   const [hasStarted, setHasStarted] = useState(false)
   const [isInitializing, setIsInitializing] = useState(false)
@@ -45,10 +46,16 @@ export function VoiceCoachChat() {
   const chatStartTime = useRef<Date>(new Date())
   const messageCount = useRef<number>(0)
 
+  // Clear preview message when component unmounts
+  useEffect(() => {
+    return () => {
+      setPreviewMessage(null)
+    }
+  }, [setPreviewMessage])
+
   // Auto-start conversation if user has already interacted (from previous step)
   useEffect(() => {
     if (!hasStarted && hasUserInteracted) {
-      console.log('🎤 [VoiceCoachChat] User interaction detected, auto-starting conversation')
       const timer = setTimeout(async () => {
         setHasStarted(true)
         try {
@@ -130,6 +137,52 @@ export function VoiceCoachChat() {
       
     } catch (error) {
       console.error('❌ [VoiceCoachChat] Error in startConversation:', error)
+    }
+  }
+
+  // Check if the conversation has reached a natural conclusion
+  const checkConversationCompletion = async (conversationHistory: ConversationMessage[]): Promise<boolean> => {
+    // Only check after minimum meaningful conversation (4+ messages)
+    if (conversationHistory.length < 4) return false
+
+    try {
+      const systemPrompt = `Analyze this coaching conversation about goal blockers and determine if it has reached a natural conclusion.
+
+The conversation is COMPLETE when:
+1. The user has shared their main blocker or challenge
+2. They've explored the root cause or contributing factors  
+3. They've acknowledged the situation or expressed understanding
+4. They seem ready to move forward (expressed acceptance, insight, or readiness)
+
+The conversation is NOT COMPLETE when:
+1. The user is still actively exploring or questioning
+2. They're expressing strong emotions that need more processing
+3. They're asking follow-up questions or seeking more guidance
+4. The conversation feels unresolved or they seem stuck
+
+Respond with ONLY "COMPLETE" or "CONTINUE" - no other text.`
+
+      const conversationText = conversationHistory
+        .slice(-6) // Only analyze last 6 messages for efficiency
+        .map(msg => `${msg.role}: ${msg.content}`)
+        .join('\n')
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: conversationText }
+        ],
+        temperature: 0.3, // Lower temperature for more consistent responses
+        max_tokens: 10
+      })
+
+      const result = response.choices[0]?.message?.content?.trim().toUpperCase()
+      return result === 'COMPLETE'
+    } catch (error) {
+      console.error('Error checking conversation completion:', error)
+      // Fallback: consider complete after 8+ messages
+      return conversationHistory.length >= 8
     }
   }
 
@@ -237,9 +290,8 @@ Keep it supportive and solution-focused. This summary will be saved as part of t
   }
 
   const handleUserInput = async (input: string) => {
-    if (!input.trim() || isProcessing || conversationComplete) return
+    if (!input.trim() || isProcessing || conversationComplete || isCompletingConversation) return
 
-    console.log('🎤 [VoiceCoachChat] User input received:', input.trim())
 
     const userMessage: ConversationMessage = {
       role: 'user',
@@ -248,14 +300,13 @@ Keep it supportive and solution-focused. This summary will be saved as part of t
 
     setConversation(prev => {
       const newConversation = [...prev, userMessage]
-      console.log('🎤 [VoiceCoachChat] Conversation updated, total messages:', newConversation.length)
       return newConversation
     })
     setCurrentInput('')
     setIsProcessing(true)
 
     try {
-      // Generate and speak coach response
+      // Generate coach response
       const coachResponse = await generateCoachResponse(userMessage.content, [...conversation, userMessage])
       
       const assistantMessage: ConversationMessage = {
@@ -263,20 +314,37 @@ Keep it supportive and solution-focused. This summary will be saved as part of t
         content: coachResponse
       }
 
-      setConversation(prev => {
-        const newConversation = [...prev, assistantMessage]
-        console.log('🎤 [VoiceCoachChat] Coach response added, total messages:', newConversation.length)
-        return newConversation
-      })
+      const newConversation = [...conversation, userMessage, assistantMessage]
+      setConversation(newConversation)
       
-      // Speak the response
+      // Immediately show preview of the response
+      setPreviewMessage(coachResponse)
+      
+      // Wait a moment for the preview to display before starting audio
+      await new Promise(resolve => setTimeout(resolve, 1000)) // 1 second delay to show preview
+      
+      // Then speak the response (this will clear the preview and start real-time sync)
       try {
-        console.log('🎤 [VoiceCoachChat] Speaking coach response:', coachResponse)
         await speak(coachResponse)
         setVoiceError(null) // Clear any previous errors
       } catch (error) {
         console.error('❌ [VoiceCoachChat] Error speaking coach response:', error)
         setVoiceError('Voice synthesis failed for the response. You can continue with text input or try again.')
+      }
+
+      // Check if conversation is complete after coach response
+      try {
+        const isComplete = await checkConversationCompletion(newConversation)
+        if (isComplete && !conversationComplete) {
+          setIsCompletingConversation(true)
+          
+          // Small delay to let the user process the final response, then auto-complete
+          setTimeout(() => {
+            handleConversationEnd()
+          }, 2000)
+        }
+      } catch (error) {
+        console.error('❌ [VoiceCoachChat] Error checking conversation completion:', error)
       }
     } catch (error) {
       console.error('❌ [VoiceCoachChat] Error processing user input:', error)
@@ -336,8 +404,8 @@ Keep it concise, supportive, and actionable. This will be spoken to the user.`
 
     setConversationComplete(true)
     setIsProcessing(true)
+    setPreviewMessage(null) // Clear any preview when conversation ends
 
-    console.log('🎤 [VoiceCoachChat] Ending conversation and generating insights')
 
     try {
       // Generate insights based on the conversation
@@ -362,7 +430,6 @@ Keep it concise, supportive, and actionable. This will be spoken to the user.`
       // Speak insights message
       const finalMessage = `${insights} Let's continue with your check-in to capture how you're feeling right now.`
       
-      console.log('🎤 [VoiceCoachChat] Speaking final insights:', finalMessage)
       await speak(finalMessage)
       
     } catch (error) {
@@ -471,17 +538,11 @@ Keep it concise, supportive, and actionable. This will be spoken to the user.`
           stepKey={`chat-${conversation.length}`} 
           className="w-full"
           showScrollable={true}
+          previewText={previewMessage || undefined}
+          previewMode={!!previewMessage && !isSpeaking}
         />
       </div>
 
-      {/* Voice Status */}
-      {(isSpeaking || isPreparingSpeech || (hasStarted && conversation.length === 0)) && (
-        <div className="text-center text-sm text-blue-600 dark:text-blue-400">
-          {isPreparingSpeech ? "🎤 Preparing to speak..." : 
-           isSpeaking ? "🗣️ Speaking..." : 
-           "🎤 Initializing conversation..."}
-        </div>
-      )}
 
       {/* Voice Error and Retry */}
       {voiceError && (
@@ -534,14 +595,14 @@ Keep it concise, supportive, and actionable. This will be spoken to the user.`
             onChange={setCurrentInput}
             onVoiceTranscript={handleVoiceTranscript}
             onKeyDown={handleKeyPress}
-            placeholder="Speak or type your response..."
+            placeholder={isCompletingConversation ? "Completing conversation..." : "Speak or type your response..."}
             voicePlaceholder="Share what's on your mind..."
-            disabled={isProcessing}
-            showVoiceButton={true}
+            disabled={isProcessing || isCompletingConversation}
+            showVoiceButton={!isCompletingConversation}
           />
           
           {/* Submit Button */}
-          {currentInput.trim() && !isProcessing && (
+          {currentInput.trim() && !isProcessing && !isCompletingConversation && (
             <div className="flex justify-center">
               <button
                 onClick={() => handleUserInput(currentInput)}
@@ -552,17 +613,19 @@ Keep it concise, supportive, and actionable. This will be spoken to the user.`
             </div>
           )}
           
-          {/* Manual End Conversation Button (after meaningful conversation) */}
-          {conversation.length >= 6 && !isProcessing && !currentInput.trim() && (
-            <div className="flex flex-col items-center space-y-2 pt-4">
-              <button
-                onClick={handleConversationEnd}
-                className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-              >
-                Get My Insights & Continue
-              </button>
-              <p className="text-xs text-muted-foreground">
-                I'll provide personalized insights based on our conversation
+          {/* Auto-completion indicator */}
+          {isCompletingConversation && (
+            <div className="text-center text-sm text-muted-foreground pt-4">
+              <p className="text-green-600 dark:text-green-400">
+                Our conversation feels complete. Preparing your personalized insights...
+              </p>
+            </div>
+          )}
+          
+          {conversation.length >= 4 && !isProcessing && !conversationComplete && !isCompletingConversation && (
+            <div className="text-center text-sm text-muted-foreground pt-4">
+              <p className="text-blue-600 dark:text-blue-400">
+                I'm listening and will provide insights when our conversation feels complete...
               </p>
             </div>
           )}
@@ -609,12 +672,12 @@ Keep it concise, supportive, and actionable. This will be spoken to the user.`
                 <p>
                   Time: {minutesElapsed}m • Stage: {conversationStage} • Messages: {userMessages}
                 </p>
-                {conversation.length >= 6 && (
+                {conversation.length >= 4 && (
                   <p className="text-green-600 dark:text-green-400">
-                    Ready for insights! Click "Get My Insights" when you're ready to continue
+                    I'm analyzing our conversation and will provide insights when it feels complete
                   </p>
                 )}
-                {conversation.length < 6 && (
+                {conversation.length < 4 && (
                   <p className="text-blue-600 dark:text-blue-400">
                     Continue sharing - I'm here to help you work through this
                   </p>

@@ -12,10 +12,12 @@ interface CoachState {
   hasVoiceEnabled: boolean
   isPreparingSpeech: boolean
   currentMessage: string | null
+  previewMessage: string | null
   currentWordIndex: number
   spokenMessages: Set<string>
   hasUserInteracted: boolean
   audioAnalysisData: AudioAnalysisData | null
+  currentAudio: HTMLAudioElement | null
   isRetrying: boolean
   retryAttempt: number
   retryDelay: number
@@ -25,6 +27,7 @@ interface CoachContextType extends CoachState {
   enableVoice: () => void
   disableVoice: () => void
   speak: (message: string, force?: boolean) => Promise<void>
+  setPreviewMessage: (message: string | null) => void
   startListening: (onInterimResult?: (transcript: string) => void, onFinalResult?: (transcript: string) => void) => Promise<any>
   startListeningForText: (onInterimResult?: (transcript: string) => void, onFinalResult?: (transcript: string) => void) => Promise<string>
   stopListening: () => void
@@ -44,10 +47,12 @@ export function CoachProvider({ children }: { children: React.ReactNode }) {
     hasVoiceEnabled: true, // Auto-enable voice for better UX
     isPreparingSpeech: false,
     currentMessage: null,
+    previewMessage: null,
     currentWordIndex: 0,
     spokenMessages: new Set<string>(),
     hasUserInteracted: false,
     audioAnalysisData: null,
+    currentAudio: null,
     isRetrying: false,
     retryAttempt: 0,
     retryDelay: 0
@@ -123,6 +128,7 @@ export function CoachProvider({ children }: { children: React.ReactNode }) {
             ...prev,
             isPreparingSpeech: true,
             currentMessage: message
+            // Keep preview visible during preparation
           }))
         },
         onRetry: (attempt: number, delay: number) => {
@@ -152,6 +158,8 @@ export function CoachProvider({ children }: { children: React.ReactNode }) {
               ...prev,
               isPreparingSpeech: false,
               isSpeaking: true,
+              currentAudio: audio,
+              // Don't clear preview here - let RealTimeCaptions handle the transition
               spokenMessages: newSpokenMessages,
               isRetrying: false,
               retryAttempt: 0,
@@ -181,6 +189,8 @@ export function CoachProvider({ children }: { children: React.ReactNode }) {
             isPreparingSpeech: false,
             currentMessage: null,
             currentWordIndex: 0,
+            currentAudio: null,
+            previewMessage: null, // Clear preview when speech ends
             audioAnalysisData: null,
             isRetrying: false,
             retryAttempt: 0,
@@ -204,6 +214,8 @@ export function CoachProvider({ children }: { children: React.ReactNode }) {
             isPreparingSpeech: false,
             currentMessage: null,
             currentWordIndex: 0,
+            currentAudio: null,
+            previewMessage: null,
             audioAnalysisData: null
           }))
           currentSpeechRef.current = null
@@ -225,6 +237,8 @@ export function CoachProvider({ children }: { children: React.ReactNode }) {
         isPreparingSpeech: false,
         currentMessage: null,
         currentWordIndex: 0,
+        currentAudio: null,
+        previewMessage: null,
         audioAnalysisData: null
       }))
       currentSpeechRef.current = null
@@ -288,6 +302,10 @@ export function CoachProvider({ children }: { children: React.ReactNode }) {
     setState(prev => ({ ...prev, hasUserInteracted: true }))
   }, [])
 
+  const setPreviewMessage = useCallback((message: string | null) => {
+    setState(prev => ({ ...prev, previewMessage: message }))
+  }, [])
+
   const stopCurrentSpeech = useCallback(() => {
     if (currentSpeechRef.current) {
       currentSpeechRef.current.pause()
@@ -312,6 +330,8 @@ export function CoachProvider({ children }: { children: React.ReactNode }) {
       isPreparingSpeech: false,
       currentMessage: null,
       currentWordIndex: 0,
+      currentAudio: null,
+      previewMessage: null,
       audioAnalysisData: null
     }))
   }, [])
@@ -321,6 +341,7 @@ export function CoachProvider({ children }: { children: React.ReactNode }) {
     enableVoice,
     disableVoice,
     speak,
+    setPreviewMessage,
     startListening,
     startListeningForText,
     stopListening,

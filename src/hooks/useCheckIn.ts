@@ -154,31 +154,9 @@ export function useCanCheckInNow() {
 
       return data
     },
-    staleTime: 30 * 1000, // 30 seconds
-    gcTime: 5 * 60 * 1000, // 5 minutes
-    refetchInterval: (data) => {
-      // More frequent updates during critical times
-      const now = new Date()
-      const currentHour = now.getHours()
-      const currentMinute = now.getMinutes()
-      
-      // Update every 10 seconds when:
-      // - Close to opening (5:55 PM - 6:05 PM)
-      // - Close to closing (11:50 PM - 11:59 PM)
-      if ((currentHour === 17 && currentMinute >= 55) || 
-          (currentHour === 18 && currentMinute <= 5) ||
-          (currentHour === 23 && currentMinute >= 50)) {
-        return 10 * 1000 // 10 seconds
-      }
-      
-      // Update every 30 seconds during check-in window
-      if (data && currentHour >= 18 && currentHour <= 23) {
-        return 30 * 1000 // 30 seconds
-      }
-      
-      // Normal update every minute
-      return 60 * 1000 // 1 minute
-    },
+    staleTime: 5 * 60 * 1000, // 5 minutes - longer stale time
+    gcTime: 10 * 60 * 1000, // 10 minutes
+    // Remove refetchInterval - no need to poll during active check-in
   })
 }
 
