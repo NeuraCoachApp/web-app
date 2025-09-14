@@ -81,7 +81,9 @@ export type Database = {
       profile: {
         Row: {
           created_at: string
+          daily_streak: number | null
           first_name: string | null
+          last_check_in_date: string | null
           last_name: string | null
           subscription_status: string | null
           updated_at: string
@@ -89,7 +91,9 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          daily_streak?: number | null
           first_name?: string | null
+          last_check_in_date?: string | null
           last_name?: string | null
           subscription_status?: string | null
           updated_at?: string
@@ -97,7 +101,9 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          daily_streak?: number | null
           first_name?: string | null
+          last_check_in_date?: string | null
           last_name?: string | null
           subscription_status?: string | null
           updated_at?: string
@@ -215,6 +221,25 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      calculate_daily_progress: {
+        Args: { p_date?: string; p_goal_uuid: string }
+        Returns: Json
+      }
+      can_check_in_now: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
+      create_check_in_session: {
+        Args: {
+          p_blocker?: string
+          p_goal_uuid: string
+          p_mood: number
+          p_motivation: number
+          p_summary: string
+          p_task_completions?: Json
+        }
+        Returns: Json
+      }
       create_profile: {
         Args: { p_user_uuid: string }
         Returns: {
@@ -249,12 +274,26 @@ export type Database = {
         Args: { p_user_uuid: string }
         Returns: {
           created_at: string
+          daily_streak: number | null
           first_name: string | null
+          last_check_in_date: string | null
           last_name: string | null
           subscription_status: string | null
           updated_at: string
           uuid: string
         }
+      }
+      get_todays_tasks_for_checkin: {
+        Args: { p_goal_uuid: string }
+        Returns: Json
+      }
+      get_user_streak: {
+        Args: { p_user_uuid: string }
+        Returns: Json
+      }
+      update_daily_streak: {
+        Args: { p_user_uuid: string }
+        Returns: boolean
       }
       update_profile: {
         Args: {
@@ -269,6 +308,10 @@ export type Database = {
           updated_at: string
           user_uuid: string
         }[]
+      }
+      update_task_completion: {
+        Args: { p_is_completed: boolean; p_task_uuid: string }
+        Returns: boolean
       }
     }
     Enums: {

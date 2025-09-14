@@ -1,9 +1,11 @@
 'use client'
 
 import React from 'react'
-import { Globe, LogOut, User, ChevronDown } from 'lucide-react'
+import { Globe, LogOut, User, ChevronDown, Flame } from 'lucide-react'
 import { ThemeToggle } from '@/src/components/ui/theme-toggle'
 import { Goal } from '@/src/classes/Goal'
+import { useUserStreak } from '@/src/hooks/useCheckIn'
+import { useAuth } from '@/src/contexts/AuthContext'
 
 interface DashboardHeaderProps {
   userEmail?: string
@@ -21,6 +23,8 @@ export default function DashboardHeader({
   onSignOut 
 }: DashboardHeaderProps) {
   const selectedGoal = goals[selectedGoalIndex]
+  const { user } = useAuth()
+  const { data: userStreak } = useUserStreak(user?.id)
 
   return (
     <div className="border-b border-border bg-background/95 backdrop-blur-sm sticky top-0 z-50">
@@ -68,8 +72,23 @@ export default function DashboardHeader({
             )}
           </div>
           
-          {/* Right side - User info and actions */}
+          {/* Right side - Streak, User info and actions */}
           <div className="flex items-center gap-4">
+            {/* Streak Display */}
+            {userStreak && (
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-orange-50 dark:bg-orange-900/20 rounded-full border border-orange-200 dark:border-orange-800">
+                <Flame className="w-4 h-4 text-orange-500" />
+                <span className="text-sm font-medium text-orange-700 dark:text-orange-300">
+                  {userStreak.daily_streak || 0} day streak
+                </span>
+                {!userStreak.can_check_in_today && (
+                  <span className="text-xs text-green-600 dark:text-green-400 font-medium ml-1">
+                    ✓
+                  </span>
+                )}
+              </div>
+            )}
+            
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <User className="w-4 h-4" />
               <span className="hidden sm:inline">{userEmail}</span>

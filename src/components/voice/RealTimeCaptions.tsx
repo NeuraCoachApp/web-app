@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useCoach } from '@/src/contexts/CoachContext'
 
@@ -11,6 +11,7 @@ interface RealTimeCaptionsProps {
   showOnSpeaking?: boolean
   showProgress?: boolean
   stepKey?: string | number
+  showScrollable?: boolean
 }
 
 export function RealTimeCaptions({ 
@@ -19,13 +20,15 @@ export function RealTimeCaptions({
   className = '',
   showOnSpeaking = true,
   showProgress = true,
-  stepKey
+  stepKey,
+  showScrollable = false
 }: RealTimeCaptionsProps) {
   const { isSpeaking, isPreparingSpeech, currentMessage, currentWordIndex } = useCoach()
   const [allWords, setAllWords] = useState<string[]>([])
   const [visibleWordCount, setVisibleWordCount] = useState(0)
   const [isVisible, setIsVisible] = useState(false)
   const [lastStepKey, setLastStepKey] = useState<string | number | undefined>(stepKey)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
 
   // Clear captions when step changes
   useEffect(() => {
@@ -56,6 +59,12 @@ export function RealTimeCaptions({
         setVisibleWordCount(0)
         setIsVisible(true)
         
+        // For scrollable mode: scroll to top when new message starts, then auto-scroll as words appear
+        if (showScrollable && scrollContainerRef.current) {
+          // First scroll to top to show the beginning of the new message
+          scrollContainerRef.current.scrollTop = 0
+        }
+        
         // Add debug logging
         if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
           console.log(`Caption initialized with ${words.length} parts: "${currentMessage}"`)
@@ -63,7 +72,7 @@ export function RealTimeCaptions({
       }
     }
     // Keep captions visible on the same step even when not actively speaking
-  }, [isSpeaking, currentMessage, allWords])
+  }, [isSpeaking, currentMessage, allWords, showScrollable])
 
   // Update visible word count as words are spoken
   useEffect(() => {
@@ -97,13 +106,28 @@ export function RealTimeCaptions({
       if (partsToShow > visibleWordCount) {
         setVisibleWordCount(partsToShow)
         
+        // Auto-scroll to bottom in scrollable mode only when content overflows
+        if (showScrollable && scrollContainerRef.current) {
+          setTimeout(() => {
+            if (scrollContainerRef.current) {
+              const container = scrollContainerRef.current
+              const isOverflowing = container.scrollHeight > container.clientHeight
+              
+              if (isOverflowing) {
+                // Only scroll if content is overflowing
+                container.scrollTop = container.scrollHeight
+              }
+            }
+          }, 100) // Small delay to ensure DOM update
+        }
+        
         // Add debug logging
         if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
           console.log(`Caption update: wordIndex=${currentWordIndex}, showing ${partsToShow} parts`)
         }
       }
     }
-  }, [currentWordIndex, isSpeaking, currentMessage, allWords, visibleWordCount])
+  }, [currentWordIndex, isSpeaking, currentMessage, allWords, visibleWordCount, showScrollable])
 
   // Function to render words with individual fade-in animations
   const renderWords = () => {
@@ -142,6 +166,33 @@ export function RealTimeCaptions({
     })
   }
 
+  if (showScrollable) {
+    return (
+      <div className={`w-full ${className}`}>
+        <div 
+          ref={scrollContainerRef}
+          className="h-48 overflow-y-auto bg-card/50 rounded-lg border border-border/50 p-4 scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent"
+          style={{ 
+            overflowAnchor: 'none' // Prevent scroll anchoring issues
+          }}
+        >
+          {isVisible && allWords.length > 0 ? (
+            <div className="text-foreground text-base leading-relaxed">
+              {renderWords()}
+              {/* Invisible element to ensure scroll to bottom works */}
+              <div className="h-2" />
+            </div>
+          ) : (
+            <div className="text-muted-foreground text-sm italic flex items-center justify-center h-full">
+              Waiting for coach to speak...
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // Original overlay mode for other components
   return (
     <div className="w-[70%] h-full flex items-center justify-center">
       <div className="max-w-lg mx-auto px-4 py-3 text-center min-h-[60px] flex items-center justify-center">

@@ -1,10 +1,13 @@
 'use client'
 
-import React from 'react'
+import React, { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { Goal } from '@/src/classes/Goal'
 import { Task } from '@/src/classes/Task'
 import { getTodaysTasks } from '../timeline/utils'
-import { Calendar, Square, CheckSquare } from 'lucide-react'
+import { useUserStreak, useCanCheckInNow } from '@/src/hooks/useCheckIn'
+import { useAuth } from '@/src/contexts/AuthContext'
+import { Calendar, Square, CheckSquare, MessageCircle, Clock } from 'lucide-react'
 
 interface DailyTaskListProps {
   goal: Goal | null
@@ -59,7 +62,93 @@ function TaskItem({ task, onToggle }: TaskItemProps) {
 }
 
 export default function DailyTaskList({ goal, onTaskToggle }: DailyTaskListProps) {
+  const { user } = useAuth()
+  const router = useRouter()
   const todaysTasks = getTodaysTasks(goal)
+  const [currentTime, setCurrentTime] = useState(new Date())
+  
+  // Check-in related hooks
+  const { data: userStreak } = useUserStreak(user?.id)
+  const { data: canCheckInNow = false } = useCanCheckInNow()
+  
+  // Update current time every minute to refresh check-in status
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date())
+    }, 60000) // Update every minute
+    
+    return () => clearInterval(timer)
+  }, [])
+  
+  const handleCheckIn = () => {
+    if (goal) {
+      router.push(`/check-in?goal=${goal.uuid}`)
+    }
+  }
+  
+  const canShowCheckIn = () => {
+    if (!goal || !userStreak) return false
+    
+    // Show check-in if:
+    // 1. User can check in today (hasn't checked in yet)
+    // 2. It's within the time window
+    // 3. There are tasks for today
+    return userStreak.can_check_in_today && canCheckInNow && todaysTasks.length > 0
+  }
+  
+  const getCheckInTimeStatus = () => {
+    const now = new Date()
+    const currentHour = now.getHours()
+    const currentMinute = now.getMinutes()
+    
+    if (canCheckInNow) {
+      // Check-in window is open (6 PM - 11:59 PM)
+      const endHour = currentHour >= 0 && currentHour < 6 ? 0 : 23
+      const endMinute = currentHour >= 0 && currentHour < 6 ? 0 : 59
+      
+      if (currentHour === 23) {
+        const minutesLeft = 59 - currentMinute
+        return {
+          status: "open",
+          message: `Check-in closes in ${minutesLeft} minutes`,
+          urgency: minutesLeft <= 30 ? "high" : "medium"
+        }
+      }
+      
+      return {
+        status: "open",
+        message: "Check-in window is open until 11:59 PM",
+        urgency: "low"
+      }
+    } else {
+      if (currentHour < 18) {
+        const hoursUntil = 18 - currentHour
+        const minutesUntil = 60 - currentMinute
+        const totalMinutesUntil = (hoursUntil - 1) * 60 + minutesUntil
+        
+        if (totalMinutesUntil <= 60) {
+          return {
+            status: "opening-soon",
+            message: `Check-in opens in ${Math.ceil(totalMinutesUntil)} minutes`,
+            urgency: "medium"
+          }
+        } else {
+          return {
+            status: "closed",
+            message: `Check-in opens at 6:00 PM (${hoursUntil} hours)`,
+            urgency: "low"
+          }
+        }
+      } else {
+        // After 11:59 PM
+        return {
+          status: "closed",
+          message: "Check-in window closed. Next window: 6:00 PM tomorrow",
+          urgency: "low"
+        }
+      }
+    }
+  }
 
   if (todaysTasks.length === 0) {
     return (
@@ -137,25 +226,77 @@ export default function DailyTaskList({ goal, onTaskToggle }: DailyTaskListProps
         {/* Content */}
         <div className="relative z-10 p-8">
           <div className="mb-8">
-            <div className="flex items-center gap-3 mb-3">
-              <Calendar className="w-6 h-6 text-primary" />
-              <h2 className="text-2xl font-bold text-foreground">
-                Today's Tasks
-              </h2>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-3">
+                <Calendar className="w-6 h-6 text-primary" />
+                <h2 className="text-2xl font-bold text-foreground">
+                  Today's Tasks
+                </h2>
+              </div>
+              
+              {/* Check-in Status in Header */}
+              {(() => {
+                const timeStatus = getCheckInTimeStatus()
+                
+                if (userStreak && !userStreak.can_check_in_today) {
+                  return (
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 rounded-lg border border-green-200 dark:border-green-800">
+                      <CheckSquare className="w-4 h-4" />
+                      <span className="text-sm font-medium">Checked in today</span>
+                    </div>
+                  )
+                }
+                
+                if (canShowCheckIn()) {
+                  return (
+                    <button
+                      onClick={handleCheckIn}
+                      className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg font-medium transition-colors"
+                    >
+                      <MessageCircle className="w-4 h-4" />
+                      Daily Check-In
+                    </button>
+                  )
+                }
+                
+                return (
+                  <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm ${
+                    timeStatus.status === "opening-soon"
+                      ? "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800"
+                      : timeStatus.status === "open"
+                        ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800"
+                        : "bg-muted/50 text-muted-foreground border-border/50"
+                  }`}>
+                    {timeStatus.status === "opening-soon" ? (
+                      <Clock className="w-4 h-4 animate-pulse" />
+                    ) : timeStatus.status === "open" ? (
+                      <CheckSquare className="w-4 h-4" />
+                    ) : (
+                      <Clock className="w-4 h-4" />
+                    )}
+                    <span className="font-medium">
+                      {timeStatus.status === "open" ? "Check-in window is open until 11:59 PM" : timeStatus.message}
+                    </span>
+                  </div>
+                )
+              })()}
             </div>
-            <p className="text-muted-foreground">
-              {new Date().toLocaleDateString('en-US', { 
-                weekday: 'long', 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric' 
-              })}
-            </p>
-            {goal && (
-              <p className="text-sm text-muted-foreground mt-2">
-                From goal: <span className="font-medium text-foreground">{goal.text}</span>
+            
+            <div className="flex items-center justify-between">
+              <p className="text-muted-foreground">
+                {new Date().toLocaleDateString('en-US', { 
+                  weekday: 'long', 
+                  year: 'numeric', 
+                  month: 'long', 
+                  day: 'numeric' 
+                })}
               </p>
-            )}
+              {goal && (
+                <p className="text-sm text-muted-foreground">
+                  From goal: <span className="font-medium text-foreground">{goal.text}</span>
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Task List */}
