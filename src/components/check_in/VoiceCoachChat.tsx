@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useCheckInContext } from './CheckInProvider'
 import { CoachBlob } from '@/src/components/voice/CoachBlob'
 import { FlowInput } from '@/src/components/voice/FlowInput'
@@ -46,6 +46,7 @@ export function VoiceCoachChat() {
   
   const chatStartTime = useRef<Date>(new Date())
   const messageCount = useRef<number>(0)
+  const conversationInitialized = useRef<boolean>(false)
 
   // Clear preview message when component unmounts
   useEffect(() => {
@@ -65,22 +66,7 @@ export function VoiceCoachChat() {
     return () => clearInterval(timer)
   }, [hasStarted, conversationComplete])
 
-  // Auto-start conversation if user has already interacted (from previous step)
-  useEffect(() => {
-    if (!hasStarted && hasUserInteracted) {
-      const timer = setTimeout(async () => {
-        setHasStarted(true)
-        try {
-          await startConversation()
-        } catch (error) {
-          console.error('❌ [VoiceCoachChat] Error auto-starting conversation:', error)
-          setVoiceError('Voice synthesis failed to start. Please try again or continue with text input.')
-        }
-      }, 1000) // 1 second delay to ensure component is mounted
-      
-      return () => clearTimeout(timer)
-    }
-  }, [hasUserInteracted, hasStarted])
+  // This effect is replaced by the one below for immediate auto-start
 
   // Check if conversation should end (only by time limit, not automatically)
   useEffect(() => {
@@ -103,7 +89,15 @@ export function VoiceCoachChat() {
     }
   }, [conversation, conversationComplete])
 
-  const startConversation = async () => {
+  const startConversation = useCallback(async () => {
+    if (conversationInitialized.current) {
+      console.log('🎤 [VoiceCoachChat] startConversation called but already initialized, skipping')
+      return
+    }
+    
+    conversationInitialized.current = true
+    console.log('🎤 [VoiceCoachChat] Starting conversation (first time)')
+    
     try {
       const progressPercentage = getProgressPercentage()
       const completedTasks = todaysTasks?.filter((task: any) => task.isCompleted) || []
@@ -128,6 +122,9 @@ export function VoiceCoachChat() {
       
       setConversation([assistantMessage])
       
+      // Immediately show preview message
+      setPreviewMessage(openingMessage)
+      
       console.log('🎤 [VoiceCoachChat] Starting conversation with message:', openingMessage)
       console.log('🎤 [VoiceCoachChat] Task context:', { 
         total: todaysTasks?.length || 0, 
@@ -137,6 +134,7 @@ export function VoiceCoachChat() {
       
       // Speak the opening message with retry logic
       try {
+        console.log('🎤 [VoiceCoachChat] About to call speak() for opening message:', openingMessage.substring(0, 50) + '...')
         await speak(openingMessage)
         console.log('🎤 [VoiceCoachChat] Successfully started speaking')
         setVoiceError(null) // Clear any previous errors
@@ -149,7 +147,7 @@ export function VoiceCoachChat() {
     } catch (error) {
       console.error('❌ [VoiceCoachChat] Error in startConversation:', error)
     }
-  }
+  }, [getProgressPercentage, todaysTasks, speak, setPreviewMessage])
 
   // Check if the conversation has reached a natural conclusion
   const checkConversationCompletion = async (conversationHistory: ConversationMessage[]): Promise<boolean> => {
@@ -458,8 +456,41 @@ Keep it concise, supportive, and actionable. This will be spoken to the user.`
     setCurrentStep('mood')
   }
 
-  // Show intro screen first (similar to goal creation flow)
-  if (!hasStarted) {
+  // Auto-start conversation immediately when component mounts (if user already interacted)
+  useEffect(() => {
+    if (!hasStarted && hasUserInteracted) {
+      console.log('🎤 [VoiceCoachChat] useEffect triggering startConversation')
+      setHasStarted(true)
+      
+      // Start conversation immediately
+      setTimeout(async () => {
+        try {
+          console.log('🎤 [VoiceCoachChat] Auto-starting conversation...')
+          await startConversation()
+        } catch (error) {
+          console.error('❌ [VoiceCoachChat] Error auto-starting conversation:', error)
+          setVoiceError('Voice synthesis failed to start. Please try again or continue with text input.')
+        }
+      }, 500) // Short delay to ensure component is ready
+    }
+  }, [hasUserInteracted, hasStarted, startConversation])
+
+  // If user has already interacted (from previous step), skip intro screen
+  if (hasUserInteracted && !hasStarted) {
+    return (
+      <div className="max-w-2xl mx-auto space-y-8">
+        <div className="flex justify-center mb-6">
+          <CoachBlob size={200} />
+        </div>
+        <div className="text-center text-sm text-muted-foreground">
+          <p>Starting conversation...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Show intro screen only if user hasn't interacted yet
+  if (!hasUserInteracted) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center px-4">
         <div className="max-w-2xl w-full text-center space-y-8">
@@ -476,94 +507,22 @@ Keep it concise, supportive, and actionable. This will be spoken to the user.`
             
             <div className="pt-8">
               <button
-                onClick={async () => {
+                onClick={() => {
                   console.log('🎤 [VoiceCoachChat] User clicked start button')
-                  setIsInitializing(true)
-                  markUserInteracted() // This enables voice synthesis
-                  
-                  // Wait a moment for the interaction to register
-                  await new Promise(resolve => setTimeout(resolve, 100))
-                  
-                  setHasStarted(true)
-                  
-                  // Add a longer delay to ensure everything is ready
-                  setTimeout(async () => {
-                    try {
-                      console.log('🎤 [VoiceCoachChat] Starting conversation...')
-                      await startConversation()
-                    } catch (error) {
-                      console.error('❌ [VoiceCoachChat] Error starting conversation:', error)
-                    } finally {
-                      setIsInitializing(false)
-                    }
-                  }, 1000) // 1 second delay
+                  markUserInteracted() // This enables voice synthesis and triggers auto-start
                 }}
-                disabled={isInitializing}
-                className="bg-primary hover:bg-primary/90 disabled:bg-primary/50 text-primary-foreground px-8 py-4 rounded-xl text-lg font-semibold transition-all duration-200 transform hover:scale-105 disabled:scale-100 disabled:cursor-not-allowed"
+                className="bg-primary hover:bg-primary/90 text-primary-foreground px-8 py-4 rounded-xl text-lg font-semibold transition-all duration-200 transform hover:scale-105"
               >
-                {isInitializing ? (
-                  <div className="flex items-center space-x-2">
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    <span>Starting...</span>
-                  </div>
-                ) : (
-                  '🎤 Start Voice Conversation'
-                )}
+                🎤 Start Voice Conversation
               </button>
             </div>
           </div>
-
-          {/* Features */}
-          <div className="pt-12 space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm text-muted-foreground">
-              <div className="flex items-center justify-center space-x-2">
-                <div className="w-2 h-2 bg-blue-500 rounded-full" />
-                <span>Voice-guided conversation</span>
-              </div>
-              <div className="flex items-center justify-center space-x-2">
-                <div className="w-2 h-2 bg-green-500 rounded-full" />
-                <span>Supportive coaching</span>
-              </div>
-              <div className="flex items-center justify-center space-x-2">
-                <div className="w-2 h-2 bg-purple-500 rounded-full" />
-                <span>Progress insights</span>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     )
   }
 
-  // Show waiting state with captions while conversation is starting
-  if (hasStarted && conversation.length === 0 && !voiceError) {
-    return (
-      <div className="max-w-2xl mx-auto space-y-8">
-        {/* Coach Blob */}
-        <div className="flex justify-center mb-6">
-          <CoachBlob size={200} />
-        </div>
-
-        {/* Real-time Captions - show waiting state */}
-        <div className="w-full">
-          <RealTimeCaptions 
-            stepKey={`chat-starting`} 
-            className="w-full"
-            showScrollable={true}
-            previewText={previewMessage || undefined}
-            previewMode={!!previewMessage && !isSpeaking}
-          />
-        </div>
-
-        {/* Show preparation status */}
-        {!previewMessage && !isSpeaking && !isPreparingSpeech && (
-          <div className="text-center text-sm text-muted-foreground">
-            <p>Preparing conversation...</p>
-          </div>
-        )}
-      </div>
-    )
-  }
+  // No waiting state - jump straight to main interface with preview
 
   return (
     <div className="max-w-2xl mx-auto space-y-8">
