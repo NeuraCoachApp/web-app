@@ -98,20 +98,19 @@ export function RealTimeCaptions({
     return parts
   }
 
-  // Utility function to calculate which word should be shown based on audio timing
-  // This EXACTLY matches the algorithm used in elevenlabs.ts for accurate synchronization
-  const getCurrentAudioWordIndex = (currentTime: number, duration: number, wordCount: number, playbackRate: number = 0.85): number => {
-    if (duration === 0 || wordCount === 0) return 0
+  // Use real-time audio analysis for word timing - same as coach blob
+  const getCurrentWordIndexFromAudio = (wordCount: number): number => {
+    if (!audioAnalysisData?.isPlaying || !currentAudio || wordCount === 0) return 0
     
-    // Calculate progress through the audio
+    // Use actual audio currentTime and duration for precise synchronization
+    const currentTime = currentAudio.currentTime
+    const duration = currentAudio.duration
+    
+    if (duration === 0) return 0
+    
+    // Calculate progress through the audio (same as coach blob timing)
     const progress = currentTime / duration
-    
-    // Show words slightly ahead of the audio for more natural reading experience
-    // This gives users time to read before hearing the word
-    const leadTimeMs = 0.0 // No lead time - sync exactly with audio
-    const leadTimeProgress = leadTimeMs / duration // Convert to progress percentage
-    const adjustedProgress = Math.min(1, progress + leadTimeProgress)
-    const wordIndex = Math.floor(adjustedProgress * wordCount)
+    const wordIndex = Math.floor(progress * wordCount)
     
     return Math.min(Math.max(0, wordIndex), wordCount - 1)
   }
@@ -137,11 +136,12 @@ export function RealTimeCaptions({
       const parts = parseMarkdown(previewText)
       setPreviewParts(parts)
       setIsPreviewVisible(true)
-    } else {
+    } else if (!previewText) {
+      // Only clear preview if previewText is null/undefined, not when switching to speaking
       setPreviewParts([])
       setIsPreviewVisible(false)
     }
-  }, [previewMode, previewText, isSpeaking, isPreviewVisible])
+  }, [previewMode, previewText, isSpeaking])
 
   // Real audio-synchronized word timing using the same approach as coach blob
   useEffect(() => {
@@ -149,15 +149,10 @@ export function RealTimeCaptions({
       const updateWordTiming = () => {
         if (!currentAudio || currentAudio.paused || currentAudio.ended || !currentAudio.duration) return
         
-        // Use EXACT same logic as coach blob - real audio timing
+        // Use EXACT same logic as coach blob - real audio timing with analysis data
         const actualWords = allParts.filter(part => part.isWord)
         const wordCount = actualWords.length
-        const currentWordIndex = getCurrentAudioWordIndex(
-          currentAudio.currentTime, 
-          currentAudio.duration, 
-          wordCount, 
-          currentAudio.playbackRate || 0.85
-        )
+        const currentWordIndex = getCurrentWordIndexFromAudio(wordCount)
         
         // Calculate how many parts (including spaces) to show based on word index
         let partsToShow = 0
@@ -184,7 +179,7 @@ export function RealTimeCaptions({
         if (partsToShow !== visibleWordCount) {
           setVisibleWordCount(partsToShow)
           
-          // Auto-scroll to bottom in scrollable mode only when content overflows
+          // Smart scroll to follow the currently highlighted word
           if (showScrollable && scrollContainerRef.current) {
             setTimeout(() => {
               if (scrollContainerRef.current) {
@@ -192,8 +187,25 @@ export function RealTimeCaptions({
                 const isOverflowing = container.scrollHeight > container.clientHeight
                 
                 if (isOverflowing) {
-                  // Only scroll if content is overflowing
-                  container.scrollTop = container.scrollHeight
+                  // Find the currently highlighted word element
+                  const highlightedWords = container.querySelectorAll('.text-foreground.brightness-110')
+                  if (highlightedWords.length > 0) {
+                    const lastHighlightedWord = highlightedWords[highlightedWords.length - 1] as HTMLElement
+                    
+                    // Calculate if the highlighted word is visible
+                    const containerRect = container.getBoundingClientRect()
+                    const wordRect = lastHighlightedWord.getBoundingClientRect()
+                    
+                    // Check if word is below the visible area
+                    if (wordRect.bottom > containerRect.bottom - 20) {
+                      // Scroll to keep the highlighted word in view, but not at the very bottom
+                      const scrollTop = lastHighlightedWord.offsetTop - container.clientHeight / 2
+                      container.scrollTop = Math.max(0, scrollTop)
+                    }
+                  } else {
+                    // Fallback: scroll to bottom only if no highlighted words found
+                    container.scrollTop = container.scrollHeight
+                  }
                 }
               }
             }, 50) // Small delay to ensure DOM update
@@ -232,10 +244,10 @@ export function RealTimeCaptions({
       
       // If we have preview parts for the same message, use them instead of reinitializing
       if (isPreviewVisible && previewParts.length > 0) {
-        const previewText = previewParts.map(p => p.text).join('')
-        const currentText = parts.map(p => p.text).join('')
+        const previewTextContent = previewParts.map(p => p.text).join('')
+        const currentTextContent = parts.map(p => p.text).join('')
         
-        if (previewText === currentText) {
+        if (previewTextContent === currentTextContent) {
           // Use preview parts as the base for highlighting
           setAllParts(previewParts)
           setVisibleWordCount(0)
@@ -326,10 +338,10 @@ export function RealTimeCaptions({
             // Smooth transition when word is being highlighted
             scale: highlightState === 'speaking' ? 1.02 : 1
           }}
-          transition={{ 
-            duration: highlightState === 'speaking' ? 0.1 : 0.2,
-            delay: !isSpeaking ? index * 0.01 : 0 // Stagger only for initial preview
-          }}
+            transition={{ 
+              duration: highlightState === 'speaking' ? 0.1 : 0.2,
+              delay: (!isSpeaking && !hasCompletedSpeech) ? index * 0.01 : 0 // Stagger only for initial preview, not after completion
+            }}
           className={className}
         >
           {part.text}
@@ -349,7 +361,7 @@ export function RealTimeCaptions({
           }}
         >
           {(isVisible && allParts.length > 0) || (isPreviewVisible && previewParts.length > 0) ? (
-            <div className="text-foreground text-base leading-relaxed">
+            <div className="text-foreground text-base leading-relaxed text-center">
               {renderWords()}
               {/* Invisible element to ensure scroll to bottom works */}
               <div className="h-2" />
@@ -369,7 +381,7 @@ export function RealTimeCaptions({
     <div className="w-[70%] h-full flex items-center justify-center">
       <div className="max-w-lg mx-auto px-4 py-3 text-center min-h-[60px] flex items-center justify-center">
         {(isVisible || isPreviewVisible) && (
-          <div className={`text-gray-200 text-lg md:text-xl leading-relaxed italic ${className}`}>
+          <div className={`text-gray-200 text-lg md:text-xl leading-relaxed italic text-center ${className}`}>
             {renderWords()}
           </div>
         )}

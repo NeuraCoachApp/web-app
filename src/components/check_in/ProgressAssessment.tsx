@@ -95,48 +95,6 @@ export function ProgressAssessment() {
         )}
       </div>
 
-      {/* Progress Overview */}
-      <div className="bg-card/50 rounded-xl border border-border/50 p-6">
-        <div className="flex items-center gap-3 mb-4">
-          <TrendingUp className="w-5 h-5 text-primary" />
-          <h3 className="text-lg font-semibold text-foreground">Today's Progress</h3>
-        </div>
-        
-        <div className="space-y-4">
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Tasks completed:</span>
-            <span className="font-semibold text-foreground">
-              {completedTasks} of {totalTasks}
-            </span>
-          </div>
-          
-          <div className="w-full bg-muted/60 rounded-full h-4 overflow-hidden">
-            <div 
-              className={`h-4 rounded-full transition-all duration-500 ease-out ${
-                currentProgress >= 80 
-                  ? 'bg-green-500' 
-                  : currentProgress >= 50 
-                    ? 'bg-yellow-500' 
-                    : 'bg-red-500'
-              }`}
-              style={{ width: `${currentProgress}%` }}
-            />
-          </div>
-          
-          <div className="text-center">
-            <span className={`text-2xl font-bold ${
-              currentProgress >= 80 
-                ? 'text-green-600 dark:text-green-400' 
-                : currentProgress >= 50 
-                  ? 'text-yellow-600 dark:text-yellow-400' 
-                  : 'text-red-600 dark:text-red-400'
-            }`}>
-              {currentProgress}%
-            </span>
-          </div>
-        </div>
-      </div>
-
       {/* Task List */}
       {todaysTasks && todaysTasks.length > 0 && (
         <div className="bg-card/50 rounded-xl border border-border/50 p-6">

@@ -4,7 +4,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/src/contexts/AuthContext'
 import { useGoals } from '@/src/hooks/useGoals'
-import { useCheckInFlow, useDailyProgress, useUserStreak, useTodaysTasks, useCanCheckInNow } from '@/src/hooks/useCheckIn'
+import { useCheckInFlow, useDailyProgress, useUserStreak, useTodaysTasks } from '@/src/hooks/useCheckIn'
 import { Goal } from '@/src/classes/Goal'
 
 interface CheckInContextType {
@@ -51,7 +51,7 @@ interface CheckInProviderProps {
 }
 
 export function CheckInProvider({ children }: CheckInProviderProps) {
-  const { user, loading: authLoading } = useAuth()
+  const { user, loading: authLoading, canCheckInNow, canCheckInLoading } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
   const goalUuid = searchParams.get('goal')
@@ -68,7 +68,6 @@ export function CheckInProvider({ children }: CheckInProviderProps) {
   const { data: dailyProgress, isLoading: progressLoading, error: progressError } = useDailyProgress(selectedGoal?.uuid)
   const { data: userStreak, isLoading: streakLoading } = useUserStreak(user?.id)
   const { data: todaysTasks, isLoading: tasksLoading } = useTodaysTasks(selectedGoal?.uuid)
-  const { data: canCheckInNow = false, isLoading: timeCheckLoading } = useCanCheckInNow()
   
   // Redirect to auth if not authenticated
   useEffect(() => {
@@ -142,7 +141,7 @@ export function CheckInProvider({ children }: CheckInProviderProps) {
     }
   }
   
-  const isLoading = authLoading || goalsLoading || progressLoading || streakLoading || tasksLoading || timeCheckLoading
+  const isLoading = authLoading || goalsLoading || progressLoading || streakLoading || tasksLoading || canCheckInLoading
   const error = progressError as Error | null
   
   // Don't render if not authenticated or still loading critical data

@@ -42,6 +42,7 @@ export function VoiceCoachChat() {
   const [isInitializing, setIsInitializing] = useState(false)
   const [voiceError, setVoiceError] = useState<string | null>(null)
   const [retryCount, setRetryCount] = useState(0)
+  const [currentTime, setCurrentTime] = useState(Date.now()) // For real-time timer updates
   
   const chatStartTime = useRef<Date>(new Date())
   const messageCount = useRef<number>(0)
@@ -52,6 +53,17 @@ export function VoiceCoachChat() {
       setPreviewMessage(null)
     }
   }, [setPreviewMessage])
+
+  // Update timer every second for real-time display
+  useEffect(() => {
+    if (!hasStarted || conversationComplete) return
+
+    const timer = setInterval(() => {
+      setCurrentTime(Date.now())
+    }, 1000)
+
+    return () => clearInterval(timer)
+  }, [hasStarted, conversationComplete])
 
   // Auto-start conversation if user has already interacted (from previous step)
   useEffect(() => {
@@ -70,24 +82,23 @@ export function VoiceCoachChat() {
     }
   }, [hasUserInteracted, hasStarted])
 
-  // Check if conversation should end (5 minutes or meaningful progress)
+  // Check if conversation should end (only by time limit, not automatically)
   useEffect(() => {
     const now = new Date()
     const timeElapsed = now.getTime() - chatStartTime.current.getTime()
-    const fiveMinutes = 5 * 60 * 1000
+    const tenMinutes = 10 * 60 * 1000 // Increased to 10 minutes
 
-    // Only end conversation if time limit reached (5 minutes)
-    // Remove automatic ending based on message count for now
+    // Only end conversation if time limit reached (10 minutes) - but don't auto-end
     const userMessages = conversation.filter(msg => msg.role === 'user').length
     
-    if (timeElapsed >= fiveMinutes && userMessages >= 2) {
+    if (timeElapsed >= tenMinutes && userMessages >= 3) {
       if (!conversationComplete) {
-        console.log('🎤 [VoiceCoachChat] Auto-ending conversation due to time limit:', {
+        console.log('🎤 [VoiceCoachChat] Time limit reached but not auto-ending:', {
           timeElapsed: Math.round(timeElapsed / 1000),
           userMessages,
           totalMessages: conversation.length
         })
-        handleConversationEnd()
+        // Don't auto-end - just log for debugging
       }
     }
   }, [conversation, conversationComplete])
@@ -142,28 +153,33 @@ export function VoiceCoachChat() {
 
   // Check if the conversation has reached a natural conclusion
   const checkConversationCompletion = async (conversationHistory: ConversationMessage[]): Promise<boolean> => {
-    // Only check after minimum meaningful conversation (4+ messages)
-    if (conversationHistory.length < 4) return false
+    // Only check after minimum meaningful conversation (6+ messages) - increased threshold
+    if (conversationHistory.length < 6) return false
 
     try {
       const systemPrompt = `Analyze this coaching conversation about goal blockers and determine if it has reached a natural conclusion.
 
 The conversation is COMPLETE when:
-1. The user has shared their main blocker or challenge
-2. They've explored the root cause or contributing factors  
-3. They've acknowledged the situation or expressed understanding
-4. They seem ready to move forward (expressed acceptance, insight, or readiness)
+1. The user has shared their main blocker or challenge in detail
+2. They've explored the root cause or contributing factors thoroughly
+3. They've acknowledged the situation and expressed understanding
+4. They seem ready to move forward with clear acceptance, insight, or readiness
+5. The conversation feels naturally resolved and they're not seeking more guidance
 
 The conversation is NOT COMPLETE when:
 1. The user is still actively exploring or questioning
 2. They're expressing strong emotions that need more processing
 3. They're asking follow-up questions or seeking more guidance
 4. The conversation feels unresolved or they seem stuck
+5. They haven't fully expressed their challenges yet
+6. The coach hasn't provided sufficient support yet
+
+Be conservative - err on the side of CONTINUE rather than COMPLETE.
 
 Respond with ONLY "COMPLETE" or "CONTINUE" - no other text.`
 
       const conversationText = conversationHistory
-        .slice(-6) // Only analyze last 6 messages for efficiency
+        .slice(-8) // Analyze more messages for better context
         .map(msg => `${msg.role}: ${msg.content}`)
         .join('\n')
 
@@ -173,16 +189,17 @@ Respond with ONLY "COMPLETE" or "CONTINUE" - no other text.`
           { role: "system", content: systemPrompt },
           { role: "user", content: conversationText }
         ],
-        temperature: 0.3, // Lower temperature for more consistent responses
+        temperature: 0.1, // Even lower temperature for more conservative responses
         max_tokens: 10
       })
 
       const result = response.choices[0]?.message?.content?.trim().toUpperCase()
+      console.log('🎤 [VoiceCoachChat] Conversation completion check result:', result)
       return result === 'COMPLETE'
     } catch (error) {
       console.error('Error checking conversation completion:', error)
-      // Fallback: consider complete after 8+ messages
-      return conversationHistory.length >= 8
+      // Fallback: never auto-complete due to error
+      return false
     }
   }
 
@@ -321,7 +338,7 @@ Keep it supportive and solution-focused. This summary will be saved as part of t
       setPreviewMessage(coachResponse)
       
       // Wait a moment for the preview to display before starting audio
-      await new Promise(resolve => setTimeout(resolve, 1000)) // 1 second delay to show preview
+      await new Promise(resolve => setTimeout(resolve, 500)) // Reduced to 500ms delay
       
       // Then speak the response (this will clear the preview and start real-time sync)
       try {
@@ -332,16 +349,12 @@ Keep it supportive and solution-focused. This summary will be saved as part of t
         setVoiceError('Voice synthesis failed for the response. You can continue with text input or try again.')
       }
 
-      // Check if conversation is complete after coach response
+      // Check if conversation is complete after coach response - but don't auto-complete
       try {
         const isComplete = await checkConversationCompletion(newConversation)
         if (isComplete && !conversationComplete) {
-          setIsCompletingConversation(true)
-          
-          // Small delay to let the user process the final response, then auto-complete
-          setTimeout(() => {
-            handleConversationEnd()
-          }, 2000)
+          console.log('🎤 [VoiceCoachChat] Conversation appears complete, but not auto-ending')
+          // Don't auto-complete - let user decide when to end
         }
       } catch (error) {
         console.error('❌ [VoiceCoachChat] Error checking conversation completion:', error)
@@ -438,10 +451,7 @@ Keep it concise, supportive, and actionable. This will be spoken to the user.`
       setIsProcessing(false)
     }
 
-    // Auto-advance after speaking
-    setTimeout(() => {
-      setCurrentStep('mood')
-    }, 3000) // Longer delay for insights
+    // Don't auto-advance - let user click continue button
   }
 
   const handleContinue = () => {
@@ -521,6 +531,36 @@ Keep it concise, supportive, and actionable. This will be spoken to the user.`
             </div>
           </div>
         </div>
+      </div>
+    )
+  }
+
+  // Show waiting state with captions while conversation is starting
+  if (hasStarted && conversation.length === 0 && !voiceError) {
+    return (
+      <div className="max-w-2xl mx-auto space-y-8">
+        {/* Coach Blob */}
+        <div className="flex justify-center mb-6">
+          <CoachBlob size={200} />
+        </div>
+
+        {/* Real-time Captions - show waiting state */}
+        <div className="w-full">
+          <RealTimeCaptions 
+            stepKey={`chat-starting`} 
+            className="w-full"
+            showScrollable={true}
+            previewText={previewMessage || undefined}
+            previewMode={!!previewMessage && !isSpeaking}
+          />
+        </div>
+
+        {/* Show preparation status */}
+        {!previewMessage && !isSpeaking && !isPreparingSpeech && (
+          <div className="text-center text-sm text-muted-foreground">
+            <p>Preparing conversation...</p>
+          </div>
+        )}
       </div>
     )
   }
@@ -613,20 +653,20 @@ Keep it concise, supportive, and actionable. This will be spoken to the user.`
             </div>
           )}
           
-          {/* Auto-completion indicator */}
-          {isCompletingConversation && (
-            <div className="text-center text-sm text-muted-foreground pt-4">
-              <p className="text-green-600 dark:text-green-400">
-                Our conversation feels complete. Preparing your personalized insights...
-              </p>
-            </div>
-          )}
-          
+          {/* Manual conversation end button */}
           {conversation.length >= 4 && !isProcessing && !conversationComplete && !isCompletingConversation && (
-            <div className="text-center text-sm text-muted-foreground pt-4">
-              <p className="text-blue-600 dark:text-blue-400">
-                I'm listening and will provide insights when our conversation feels complete...
-              </p>
+            <div className="text-center pt-6 border-t border-border/30 mt-6">
+              <div className="pt-4 space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Feel free to continue sharing, or wrap up when you're ready.
+                </p>
+                <button
+                  onClick={handleConversationEnd}
+                  className="px-8 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-medium shadow-sm"
+                >
+                  ✓ Complete Conversation & Continue Check-in
+                </button>
+              </div>
             </div>
           )}
           
@@ -641,45 +681,91 @@ Keep it concise, supportive, and actionable. This will be spoken to the user.`
       {/* Conversation Complete */}
       {conversationComplete && (
         <div className="text-center space-y-4">
-          <div className="p-4 bg-card/50 rounded-xl border border-border/50">
-            <p className="text-sm text-muted-foreground mb-4">
-              Thank you for sharing. I've captured our conversation to help track your progress.
-            </p>
-            <button
-              onClick={handleContinue}
-              className="px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
-            >
-              Continue Check-In
-            </button>
-          </div>
+          {/* Show captions while insights are being spoken */}
+          {(isSpeaking || isPreparingSpeech) && (
+            <div className="p-4 bg-card/50 rounded-xl border border-border/50">
+              <p className="text-sm text-muted-foreground mb-2">
+                Preparing your personalized insights...
+              </p>
+            </div>
+          )}
+          
+          {/* Show continue button only after insights are fully spoken */}
+          {!isSpeaking && !isPreparingSpeech && (
+            <div className="p-4 bg-card/50 rounded-xl border border-border/50">
+              <p className="text-sm text-muted-foreground mb-4">
+                Thank you for sharing. I've captured our conversation to help track your progress.
+              </p>
+              <button
+                onClick={handleContinue}
+                className="px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+              >
+                Continue Check-In
+              </button>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Time indicator */}
+      {/* Time indicator with visual timer */}
       {hasStarted && !conversationComplete && (
         <div className="text-center text-xs text-muted-foreground">
           {(() => {
-            const now = new Date()
-            const timeElapsed = now.getTime() - chatStartTime.current.getTime()
+            const timeElapsed = currentTime - chatStartTime.current.getTime()
             const minutesElapsed = Math.floor(timeElapsed / 60000)
+            const secondsElapsed = Math.floor((timeElapsed % 60000) / 1000)
+            const totalMinutesLimit = 10
+            const timeRemaining = Math.max(0, (totalMinutesLimit * 60) - Math.floor(timeElapsed / 1000))
+            const minutesRemaining = Math.floor(timeRemaining / 60)
+            const secondsRemaining = timeRemaining % 60
+            const progressPercentage = Math.min(100, (timeElapsed / (totalMinutesLimit * 60 * 1000)) * 100)
+            
             const userMessages = conversation.filter(msg => msg.role === 'user').length
             const conversationStage = userMessages <= 1 ? 'Getting Started' : 
                                    userMessages <= 4 ? 'Exploring Blockers' : 
                                    userMessages <= 6 ? 'Building Solutions' : 'Gaining Insights'
             
             return (
-              <div className="space-y-1">
+              <div className="space-y-3">
+                {/* Visual Timer Bar */}
+                <div className="max-w-md mx-auto">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-xs font-medium">Conversation Timer</span>
+                    <span className="text-xs font-mono">
+                      {String(minutesRemaining).padStart(2, '0')}:{String(secondsRemaining).padStart(2, '0')} left
+                    </span>
+                  </div>
+                  <div className="w-full bg-muted/40 rounded-full h-2">
+                    <div 
+                      className={`h-2 rounded-full transition-all duration-1000 ${
+                        progressPercentage > 80 ? 'bg-red-500' : 
+                        progressPercentage > 60 ? 'bg-yellow-500' : 
+                        'bg-blue-500'
+                      }`}
+                      style={{ width: `${progressPercentage}%` }}
+                    />
+                  </div>
+                </div>
+                
+                {/* Status Info */}
                 <p>
-                  Time: {minutesElapsed}m • Stage: {conversationStage} • Messages: {userMessages}
+                  Time: {minutesElapsed}:{String(secondsElapsed).padStart(2, '0')} • Stage: {conversationStage} • Messages: {userMessages}
                 </p>
+                
                 {conversation.length >= 4 && (
                   <p className="text-green-600 dark:text-green-400">
-                    I'm analyzing our conversation and will provide insights when it feels complete
+                    You can continue sharing or use the button above to wrap up when ready
                   </p>
                 )}
                 {conversation.length < 4 && (
                   <p className="text-blue-600 dark:text-blue-400">
                     Continue sharing - I'm here to help you work through this
+                  </p>
+                )}
+                
+                {progressPercentage > 80 && (
+                  <p className="text-red-600 dark:text-red-400 font-medium">
+                    Time is running low - consider wrapping up soon
                   </p>
                 )}
               </div>

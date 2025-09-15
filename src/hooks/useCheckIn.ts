@@ -2,6 +2,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState, useCallback } from 'react'
 import { useAuth } from '@/src/contexts/AuthContext'
 import { supabase } from '@/src/lib/supabase'
+import { useGoals } from './useGoals'
+import { getTodaysTasks } from '@/src/components/dashboard/timeline/utils'
 
 export interface TaskCompletion {
   task_uuid: string
@@ -51,7 +53,6 @@ export const checkInKeys = {
   dailyProgress: (goalUuid: string) => [...checkInKeys.all, 'dailyProgress', goalUuid] as const,
   userStreak: (userId: string) => [...checkInKeys.all, 'userStreak', userId] as const,
   todaysTasks: (goalUuid: string) => [...checkInKeys.all, 'todaysTasks', goalUuid] as const,
-  canCheckIn: () => [...checkInKeys.all, 'canCheckIn'] as const,
 }
 
 /**
@@ -77,8 +78,8 @@ export function useDailyProgress(goalUuid?: string) {
       return data as unknown as DailyProgress
     },
     enabled: !!goalUuid,
-    staleTime: 30 * 1000, // 30 seconds
-    gcTime: 2 * 60 * 1000, // 2 minutes
+    staleTime: 5 * 60 * 1000, // 5 minutes - aligned with useGoals for better caching
+    gcTime: 10 * 60 * 1000, // 10 minutes
   })
 }
 
@@ -105,60 +106,58 @@ export function useUserStreak(userId?: string) {
       return data as unknown as UserStreak
     },
     enabled: !!userId,
-    staleTime: 60 * 1000, // 1 minute
-    gcTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 5 * 60 * 1000, // 5 minutes - aligned with useGoals for better caching
+    gcTime: 10 * 60 * 1000, // 10 minutes
   })
 }
 
 /**
  * Hook to get today's tasks for check-in
+ * Uses cached goals data instead of making separate API call
  */
 export function useTodaysTasks(goalUuid?: string) {
+  const { user } = useAuth()
+  const { goals } = useGoals(user?.id)
+  
   return useQuery({
     queryKey: checkInKeys.todaysTasks(goalUuid || ''),
-    queryFn: async () => {
-      if (!goalUuid) {
-        throw new Error('Goal UUID is required')
+    queryFn: () => {
+      if (!goalUuid || !goals) {
+        return []
       }
 
-      const { data, error } = await supabase.rpc('get_todays_tasks_for_checkin', {
-        p_goal_uuid: goalUuid
+      const goal = goals.get(goalUuid)
+      if (!goal) {
+        console.warn(`Goal with UUID ${goalUuid} not found in cache`)
+        return []
+      }
+
+      // Use the same logic as dashboard to get today's tasks from cached data
+      const todaysTasks = getTodaysTasks(goal)
+      
+      // Convert to the format expected by check-in components
+      return todaysTasks.map(task => {
+        // Find the milestone for this task
+        const milestone = goal.getMilestones().find((m: any) => m.uuid === task.milestone_uuid)
+        
+        return {
+          uuid: task.uuid,
+          text: task.text,
+          isCompleted: task.isCompleted,
+          start_at: task.start_at,
+          end_at: task.end_at,
+          milestone_uuid: task.milestone_uuid,
+          milestone_text: milestone?.text || ''
+        }
       })
-
-      if (error) {
-        console.error('Error fetching today\'s tasks:', error)
-        throw new Error(`Failed to fetch today's tasks: ${error.message}`)
-      }
-
-      return data || []
     },
-    enabled: !!goalUuid,
-    staleTime: 30 * 1000, // 30 seconds
-    gcTime: 2 * 60 * 1000, // 2 minutes
-  })
-}
-
-/**
- * Hook to check if user can check in now (time window validation)
- */
-export function useCanCheckInNow() {
-  return useQuery({
-    queryKey: checkInKeys.canCheckIn(),
-    queryFn: async (): Promise<boolean> => {
-      const { data, error } = await supabase.rpc('can_check_in_now')
-
-      if (error) {
-        console.error('Error checking check-in availability:', error)
-        return false
-      }
-
-      return data
-    },
-    staleTime: 5 * 60 * 1000, // 5 minutes - longer stale time
+    enabled: !!goalUuid && !!goals, // Wait for goals cache to be loaded
+    staleTime: 5 * 60 * 1000, // 5 minutes - same as useGoals
     gcTime: 10 * 60 * 1000, // 10 minutes
-    // Remove refetchInterval - no need to poll during active check-in
   })
 }
+
+// useCanCheckInNow hook moved to AuthContext for better separation of concerns
 
 /**
  * Hook to create a check-in session

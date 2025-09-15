@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Goal } from '@/src/classes/Goal'
 import { Task } from '@/src/classes/Task'
 import { getTodaysTasks } from '../timeline/utils'
-import { useUserStreak, useCanCheckInNow } from '@/src/hooks/useCheckIn'
+import { useUserStreak } from '@/src/hooks/useCheckIn'
 import { useAuth } from '@/src/contexts/AuthContext'
 import { Calendar, Square, CheckSquare, MessageCircle, Clock } from 'lucide-react'
 
@@ -62,14 +62,13 @@ function TaskItem({ task, onToggle }: TaskItemProps) {
 }
 
 export default function DailyTaskList({ goal, onTaskToggle }: DailyTaskListProps) {
-  const { user } = useAuth()
+  const { user, canCheckInNow } = useAuth()
   const router = useRouter()
   const todaysTasks = getTodaysTasks(goal)
   const [currentTime, setCurrentTime] = useState(new Date())
   
   // Check-in related hooks
   const { data: userStreak } = useUserStreak(user?.id)
-  const { data: canCheckInNow = false } = useCanCheckInNow()
   
   // Update current time every minute to refresh check-in status
   useEffect(() => {

@@ -6,11 +6,14 @@ import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/src/lib/supabase'
 import { Profile } from '@/src/hooks/useProfile'
 import { profileKeys } from '@/src/hooks/useProfile'
+import { useQuery } from '@tanstack/react-query'
 
 interface AuthContextType {
   user: User | null
   session: Session | null
   loading: boolean
+  canCheckInNow: boolean
+  canCheckInLoading: boolean
   signOut: () => Promise<void>
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>
   signUp: (email: string, password: string) => Promise<{ error: Error | null; wasSignedIn?: boolean }>
@@ -24,6 +27,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [sessionLoaded, setSessionLoaded] = useState(false)
   const queryClient = useQueryClient()
+
+  // Query for check-in availability - only when user is authenticated
+  const { data: canCheckInNow = false, isLoading: canCheckInLoading } = useQuery({
+    queryKey: ['canCheckInNow'],
+    queryFn: async (): Promise<boolean> => {
+      const { data, error } = await supabase.rpc('can_check_in_now')
+
+      if (error) {
+        console.error('Error checking check-in availability:', error)
+        return false
+      }
+
+      return data
+    },
+    enabled: !!user, // Only query when user is authenticated
+    staleTime: 5 * 60 * 1000, // 5 minutes - longer stale time
+    gcTime: 10 * 60 * 1000, // 10 minutes
+    refetchInterval: 60 * 1000, // Refetch every minute to keep time window current
+  })
 
   const loading = useMemo(() => {
     return !sessionLoaded
@@ -173,6 +195,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     user,
     session,
     loading,
+    canCheckInNow,
+    canCheckInLoading,
     signOut,
     signIn,
     signUp,
