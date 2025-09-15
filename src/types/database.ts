@@ -221,6 +221,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      batch_update_tasks: {
+        Args: { p_task_updates: Json }
+        Returns: Json
+      }
       calculate_daily_progress: {
         Args: { p_date?: string; p_goal_uuid: string }
         Returns: Json
@@ -249,6 +253,21 @@ export type Database = {
           updated_at: string
           user_uuid: string
         }[]
+      }
+      create_task: {
+        Args: {
+          p_end_at: string
+          p_goal_uuid: string
+          p_is_completed?: boolean
+          p_milestone_uuid: string
+          p_start_at: string
+          p_text: string
+        }
+        Returns: Json
+      }
+      delete_task: {
+        Args: { p_task_uuid: string }
+        Returns: boolean
       }
       get_batch_goal_object: {
         Args: { p_user_uuid: string }
@@ -311,6 +330,15 @@ export type Database = {
       }
       update_task_completion: {
         Args: { p_is_completed: boolean; p_task_uuid: string }
+        Returns: boolean
+      }
+      update_task_details: {
+        Args: {
+          p_new_end_at?: string
+          p_new_start_at?: string
+          p_new_text?: string
+          p_task_uuid: string
+        }
         Returns: boolean
       }
     }

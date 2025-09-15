@@ -190,8 +190,15 @@ export function useCreateCheckIn() {
       queryClient.invalidateQueries({ queryKey: checkInKeys.userStreak(user?.id || '') })
       queryClient.invalidateQueries({ queryKey: checkInKeys.todaysTasks(variables.goal_uuid) })
       
-      // Also invalidate goals data since task completion status may have changed
+      // Also invalidate goals data since task completion status may have changed AND new session was created
       queryClient.invalidateQueries({ queryKey: ['goals'] })
+      queryClient.invalidateQueries({ queryKey: ['goals', 'user', user?.id || ''] })
+      
+      console.log('✅ [useCreateCheckIn] Session created successfully, invalidated caches:', {
+        sessionUuid: data.uuid,
+        goalUuid: variables.goal_uuid,
+        userId: user?.id
+      })
     }
   })
 }

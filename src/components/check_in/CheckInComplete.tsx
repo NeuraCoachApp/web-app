@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useCheckInContext } from './CheckInProvider'
 import { CheckCircle, Flame, TrendingUp, Calendar, ArrowRight, Brain } from 'lucide-react'
@@ -32,16 +32,10 @@ export function CheckInComplete() {
     adjustmentsMade: boolean
     encouragementMessage: string
     strategy: string
+    adjustments?: any[]
   } | null>(null)
 
-  useEffect(() => {
-    if (!hasSubmitted) {
-      handleSubmitCheckIn()
-      setHasSubmitted(true)
-    }
-  }, [hasSubmitted])
-
-  const handleSubmitCheckIn = async () => {
+  const handleSubmitCheckIn = useCallback(async () => {
     try {
       // Step 1: Submit the check-in
       const result = await submitCheckIn()
@@ -90,7 +84,8 @@ export function CheckInComplete() {
           setAdjustmentResult({
             adjustmentsMade: false,
             encouragementMessage: "I'm here to support you. Tomorrow is a fresh start!",
-            strategy: "Continue with your current plan"
+            strategy: "Continue with your current plan",
+            adjustments: []
           })
         } finally {
           setIsAdjustingTasks(false)
@@ -101,7 +96,14 @@ export function CheckInComplete() {
       console.error('Error submitting check-in:', error)
       // Handle error - could show error message
     }
-  }
+  }, [submitCheckIn, selectedGoal, todaysTasks, checkInData, getProgressPercentage, user, queryClient, userStreak])
+
+  useEffect(() => {
+    if (!hasSubmitted) {
+      handleSubmitCheckIn()
+      setHasSubmitted(true)
+    }
+  }, [hasSubmitted, handleSubmitCheckIn])
 
   const handleReturnToDashboard = () => {
     router.push('/dashboard')
@@ -265,6 +267,30 @@ export function CheckInComplete() {
             }`}>
               {adjustmentResult.encouragementMessage}
             </p>
+
+            {/* Display specific task changes if adjustments were made */}
+            {adjustmentResult.adjustmentsMade && adjustmentResult.adjustments && adjustmentResult.adjustments.length > 0 && (
+              <div className="mt-4 pt-3 border-t border-blue-200 dark:border-blue-700">
+                <h4 className="text-sm font-semibold text-blue-800 dark:text-blue-200 mb-2">
+                  Task Changes Made:
+                </h4>
+                <ul className="space-y-2">
+                  {adjustmentResult.adjustments.map((adjustment: any, index: number) => (
+                    <li key={index} className="text-xs text-blue-700 dark:text-blue-300">
+                      <span className="inline-flex items-center gap-1">
+                        <span className="font-medium capitalize">{adjustment.action}:</span>
+                        <span>{adjustment.reason}</span>
+                      </span>
+                      {adjustment.new_text && (
+                        <div className="ml-4 mt-1 text-blue-600 dark:text-blue-400">
+                          → "{adjustment.new_text}"
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         </div>
       )}

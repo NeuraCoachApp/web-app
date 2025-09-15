@@ -10,6 +10,18 @@ export function calculateAggregatedMetrics(goal: Goal | null): AggregatedMetrics
   // Collect all sessions from all steps
   const allSessions: Session[] = goal.getSessions()
   
+  console.log('🔍 [calculateAggregatedMetrics] Debug info:', {
+    goalUuid: goal.uuid,
+    sessionsCount: allSessions.length,
+    sessions: allSessions.map(s => ({
+      uuid: s.uuid,
+      created_at: s.created_at,
+      mood: s.mood,
+      motivation: s.motivation,
+      summary: s.summary
+    }))
+  })
+  
   // Sort sessions by date
   const sortedSessions = allSessions.sort((a, b) => 
     new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
@@ -33,6 +45,13 @@ export function calculateAggregatedMetrics(goal: Goal | null): AggregatedMetrics
   Object.entries(sessionsByDate).forEach(([date, sessions]) => {
     // Sessions now have direct properties instead of insights
     const validSessions = sessions.filter(s => s.summary && s.mood && s.motivation)
+    
+    console.log('🔍 [calculateAggregatedMetrics] Processing date:', date, {
+      totalSessions: sessions.length,
+      validSessions: validSessions.length,
+      sessions: sessions.map(s => ({ uuid: s.uuid, mood: s.mood, motivation: s.motivation, summary: s.summary }))
+    })
+    
     if (validSessions.length === 0) return
 
     // Calculate averages from session properties

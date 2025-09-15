@@ -26,12 +26,32 @@ export interface TaskAdjustment {
   new_end_at?: string
   action: 'update' | 'postpone' | 'simplify' | 'split'
   reason: string
+  [key: string]: string | undefined
 }
 
 export interface AITaskAdjustmentResponse {
   adjustments: TaskAdjustment[]
   overall_strategy: string
   encouragement_message: string
+}
+
+export interface BatchUpdateResult {
+  updated_count: number
+  results: Array<{
+    task_uuid: string
+    action: string
+    reason: string
+    success: boolean
+    error?: string
+  }>
+}
+
+export interface TaskForAdjustment {
+  uuid: string
+  text: string
+  start_at: string
+  end_at: string
+  isCompleted: boolean
 }
 
 /**
@@ -101,7 +121,7 @@ export function analyzeCheckInData(
  */
 export async function generateTaskAdjustments(
   goalText: string,
-  currentTasks: any[],
+  currentTasks: TaskForAdjustment[],
   checkInData: {
     mood: number
     motivation: number
@@ -129,7 +149,7 @@ ADJUSTMENT ANALYSIS:
 - Recommended Action: ${analysis.recommendedAction}
 
 CURRENT TASKS:
-${currentTasks.map(task => `- "${task.text}" (${task.isCompleted ? 'COMPLETED' : 'PENDING'}) [${task.start_at} to ${task.end_at}]`).join('\n')}
+${currentTasks.map(task => `- UUID: ${task.uuid} - "${task.text}" (${task.isCompleted ? 'COMPLETED' : 'PENDING'}) [${task.start_at} to ${task.end_at}]`).join('\n')}
 
 ADJUSTMENT GUIDELINES:
 1. TIMELINE ADJUSTMENTS: Extend deadlines, reduce daily load, add buffer time
@@ -147,7 +167,7 @@ Return a JSON object with this exact structure:
 {
   "adjustments": [
     {
-      "task_uuid": "existing-task-uuid",
+      "task_uuid": "use-actual-uuid-from-current-tasks-list-above",
       "new_text": "Updated task description (optional)",
       "new_start_at": "2024-01-15T00:00:00.000Z (optional)",
       "new_end_at": "2024-01-15T23:59:59.999Z (optional)",
@@ -158,6 +178,12 @@ Return a JSON object with this exact structure:
   "overall_strategy": "Brief explanation of the overall adjustment strategy",
   "encouragement_message": "Supportive message for the user about these changes"
 }
+
+IMPORTANT: 
+- ALWAYS use the actual UUIDs from the CURRENT TASKS list above
+- DO NOT use placeholder values like "existing-task-uuid"
+- Only adjust tasks that are NOT completed
+- Each task_uuid must exactly match a UUID from the current tasks list
 
 IMPORTANT:
 - Only adjust tasks that are NOT completed
@@ -207,7 +233,7 @@ Focus on ${analysis.recommendedAction.toLowerCase()} to support their current st
 }
 
 /**
- * Apply task adjustments to the database
+ * Apply task adjustments to the database using RPC function
  */
 export async function applyTaskAdjustments(
   adjustments: TaskAdjustment[]
@@ -215,32 +241,33 @@ export async function applyTaskAdjustments(
   try {
     console.log('📝 [Task Adjustment] Applying adjustments to database:', adjustments.length)
     
-    for (const adjustment of adjustments) {
-      const { task_uuid, new_text, new_start_at, new_end_at, action, reason } = adjustment
-      
-      console.log(`🔄 [Task Adjustment] ${action.toUpperCase()}: ${task_uuid} - ${reason}`)
-      
-      // Build update object with only defined fields
-      const updateData: any = {}
-      if (new_text) updateData.text = new_text
-      if (new_start_at) updateData.start_at = new_start_at
-      if (new_end_at) updateData.end_at = new_end_at
-      
-      // Apply the adjustment to the database
-      const { error } = await supabase
-        .from('task')
-        .update(updateData)
-        .eq('uuid', task_uuid)
-      
-      if (error) {
-        console.error(`❌ [Task Adjustment] Failed to update task ${task_uuid}:`, error)
-        throw new Error(`Failed to update task: ${error.message}`)
-      }
-      
-      console.log(`✅ [Task Adjustment] Successfully updated task ${task_uuid}`)
+    if (adjustments.length === 0) {
+      console.log('📝 [Task Adjustment] No adjustments to apply')
+      return
     }
     
-    console.log('🎉 [Task Adjustment] All adjustments applied successfully')
+    // Use the batch update RPC function
+    const { data, error } = await supabase.rpc('batch_update_tasks', {
+      p_task_updates: adjustments
+    })
+    
+    if (error) {
+      console.error('❌ [Task Adjustment] RPC error:', error)
+      throw new Error(`Failed to apply task adjustments: ${error.message}`)
+    }
+    
+    console.log('✅ [Task Adjustment] Batch update result:', data)
+    
+    // Check if all updates were successful
+    if (data && typeof data === 'object' && 'updated_count' in data && 'results' in data) {
+      const result = data as unknown as BatchUpdateResult
+      const failedUpdates = result.results.filter(item => !item.success)
+      if (failedUpdates.length > 0) {
+        console.warn('⚠️ [Task Adjustment] Some updates failed:', failedUpdates)
+        throw new Error(`${failedUpdates.length} task updates failed`)
+      }
+      console.log(`🎉 [Task Adjustment] Successfully applied ${result.updated_count} adjustments`)
+    }
   } catch (error) {
     console.error('❌ [Task Adjustment] Error applying adjustments:', error)
     throw error
@@ -252,7 +279,7 @@ export async function applyTaskAdjustments(
  */
 export async function performIntelligentTaskAdjustment(
   goalText: string,
-  currentTasks: any[],
+  currentTasks: TaskForAdjustment[],
   checkInData: {
     mood: number
     motivation: number
@@ -268,6 +295,25 @@ export async function performIntelligentTaskAdjustment(
 }> {
   try {
     console.log('🧠 [Intelligent Task Adjustment] Starting analysis for goal:', goalText)
+    
+    // Filter out completed tasks - we only adjust incomplete tasks
+    const incompleteTasks = currentTasks.filter(task => !task.isCompleted)
+    
+    console.log('🔍 [Task Filter] Task breakdown:', {
+      total: currentTasks.length,
+      incomplete: incompleteTasks.length,
+      completed: currentTasks.length - incompleteTasks.length
+    })
+    
+    if (incompleteTasks.length === 0) {
+      console.log('✅ [Intelligent Task Adjustment] All tasks completed - no adjustments needed')
+      return {
+        adjustmentsMade: false,
+        adjustments: [],
+        encouragementMessage: "Congratulations! You've completed all your tasks. Keep up the excellent work!",
+        strategy: "No adjustments needed - all tasks are complete"
+      }
+    }
     
     // Step 1: Analyze check-in data
     const analysis = analyzeCheckInData(
@@ -289,10 +335,10 @@ export async function performIntelligentTaskAdjustment(
       }
     }
     
-    // Step 3: Generate AI-powered task adjustments
+    // Step 3: Generate AI-powered task adjustments (using only incomplete tasks)
     const aiResponse = await generateTaskAdjustments(
       goalText,
-      currentTasks,
+      incompleteTasks,
       checkInData,
       analysis
     )

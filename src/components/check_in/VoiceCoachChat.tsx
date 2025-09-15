@@ -42,10 +42,8 @@ export function VoiceCoachChat() {
   const [isInitializing, setIsInitializing] = useState(false)
   const [voiceError, setVoiceError] = useState<string | null>(null)
   const [retryCount, setRetryCount] = useState(0)
-  const [currentTime, setCurrentTime] = useState(Date.now()) // For real-time timer updates
-  
-  const chatStartTime = useRef<Date>(new Date())
-  const messageCount = useRef<number>(0)
+  const [showCompletionButton, setShowCompletionButton] = useState(false)
+  const [userMessageCount, setUserMessageCount] = useState(0)
   const conversationInitialized = useRef<boolean>(false)
 
   // Clear preview message when component unmounts
@@ -55,37 +53,20 @@ export function VoiceCoachChat() {
     }
   }, [setPreviewMessage])
 
-  // Update timer every second for real-time display
+  // Check if completion button should be shown (message limit or OpenAI solution detection)
   useEffect(() => {
-    if (!hasStarted || conversationComplete) return
+    const currentUserMessages = conversation.filter(msg => msg.role === 'user').length
+    setUserMessageCount(currentUserMessages)
 
-    const timer = setInterval(() => {
-      setCurrentTime(Date.now())
-    }, 1000)
-
-    return () => clearInterval(timer)
-  }, [hasStarted, conversationComplete])
-
-  // This effect is replaced by the one below for immediate auto-start
-
-  // Check if conversation should end (only by time limit, not automatically)
-  useEffect(() => {
-    const now = new Date()
-    const timeElapsed = now.getTime() - chatStartTime.current.getTime()
-    const tenMinutes = 10 * 60 * 1000 // Increased to 10 minutes
-
-    // Only end conversation if time limit reached (10 minutes) - but don't auto-end
-    const userMessages = conversation.filter(msg => msg.role === 'user').length
-    
-    if (timeElapsed >= tenMinutes && userMessages >= 3) {
-      if (!conversationComplete) {
-        console.log('🎤 [VoiceCoachChat] Time limit reached but not auto-ending:', {
-          timeElapsed: Math.round(timeElapsed / 1000),
-          userMessages,
-          totalMessages: conversation.length
-        })
-        // Don't auto-end - just log for debugging
-      }
+    // Show completion button if:
+    // 1. Message limit reached (50 messages) OR close to limit (40+ messages with meaningful conversation)
+    // 2. OR if OpenAI detected a solution (handled separately in handleUserInput)
+    if ((currentUserMessages >= 40 && currentUserMessages >= 3) && !conversationComplete) {
+      console.log('🎤 [VoiceCoachChat] Message limit approaching - showing completion button:', {
+        userMessages: currentUserMessages,
+        totalMessages: conversation.length
+      })
+      setShowCompletionButton(true)
     }
   }, [conversation, conversationComplete])
 
@@ -155,24 +136,23 @@ export function VoiceCoachChat() {
     if (conversationHistory.length < 6) return false
 
     try {
-      const systemPrompt = `Analyze this coaching conversation about goal blockers and determine if it has reached a natural conclusion.
+      const systemPrompt = `Analyze this coaching conversation to determine if the user has reached a SOLUTION or meaningful insight about their challenges.
 
-The conversation is COMPLETE when:
-1. The user has shared their main blocker or challenge in detail
-2. They've explored the root cause or contributing factors thoroughly
-3. They've acknowledged the situation and expressed understanding
-4. They seem ready to move forward with clear acceptance, insight, or readiness
-5. The conversation feels naturally resolved and they're not seeking more guidance
+The conversation has reached a SOLUTION when:
+1. The user has identified specific actionable steps they can take
+2. They've expressed understanding of what went wrong and how to fix it
+3. They've shown acceptance and readiness to try a different approach
+4. They've gained clarity about their blockers and have a plan forward
+5. They sound resolved, motivated, or have had an "aha moment"
 
-The conversation is NOT COMPLETE when:
-1. The user is still actively exploring or questioning
-2. They're expressing strong emotions that need more processing
-3. They're asking follow-up questions or seeking more guidance
-4. The conversation feels unresolved or they seem stuck
-5. They haven't fully expressed their challenges yet
-6. The coach hasn't provided sufficient support yet
+The conversation has NOT reached a solution when:
+1. The user is still confused or stuck without clear next steps
+2. They're still venting emotions without actionable insights
+3. They're asking more questions or seeking additional guidance
+4. They haven't identified what they'll do differently tomorrow
+5. The conversation feels incomplete or they seem to need more support
 
-Be conservative - err on the side of CONTINUE rather than COMPLETE.
+Focus on whether the user has gained ACTIONABLE CLARITY, not just emotional processing.
 
 Respond with ONLY "COMPLETE" or "CONTINUE" - no other text.`
 
@@ -206,12 +186,22 @@ Respond with ONLY "COMPLETE" or "CONTINUE" - no other text.`
       const progressPercentage = getProgressPercentage()
       const completedTasks = todaysTasks?.filter((task: any) => task.isCompleted) || []
       const incompleteTasks = todaysTasks?.filter((task: any) => !task.isCompleted) || []
-      const userMessageCount = conversationHistory.filter(msg => msg.role === 'user').length
+      const currentUserMessageCount = conversationHistory.filter(msg => msg.role === 'user').length
       
       // Build task context for the AI
       const taskContext = todaysTasks?.map((task: any) => 
         `- "${task.text}" (${task.isCompleted ? 'COMPLETED' : 'NOT COMPLETED'})`
       ).join('\n') || 'No tasks available'
+
+      // Message limit warnings
+      let messageLimitGuidance = ''
+      if (currentUserMessageCount >= 45) {
+        messageLimitGuidance = `URGENT: You are at ${currentUserMessageCount}/50 messages. Start wrapping up the conversation immediately and guide toward completion.`
+      } else if (currentUserMessageCount >= 40) {
+        messageLimitGuidance = `IMPORTANT: You are at ${currentUserMessageCount}/50 messages. Begin preparing to wrap up the conversation and guide toward actionable insights.`
+      } else if (currentUserMessageCount >= 35) {
+        messageLimitGuidance = `NOTE: You are at ${currentUserMessageCount}/50 messages. Start moving toward solutions and prepare for conversation completion.`
+      }
 
       const systemPrompt = `You are an empathetic AI life coach conducting a structured check-in dialogue. Follow this coaching approach:
 
@@ -224,7 +214,10 @@ COACHING FLOW (based on conversation stage):
 CONVERSATION CONTEXT:
 - Goal: ${selectedGoal?.text}
 - Progress today: ${progressPercentage}% (${completedTasks.length}/${todaysTasks?.length || 0} tasks completed)
-- Current conversation stage: ${userMessageCount <= 1 ? 'INITIAL' : userMessageCount <= 4 ? 'EXPLORATION' : userMessageCount <= 6 ? 'SOLUTION BUILDING' : 'INSIGHT DELIVERY'}
+- Current conversation stage: ${currentUserMessageCount <= 1 ? 'INITIAL' : currentUserMessageCount <= 4 ? 'EXPLORATION' : currentUserMessageCount <= 6 ? 'SOLUTION BUILDING' : 'INSIGHT DELIVERY'}
+- User message count: ${currentUserMessageCount}/50
+
+${messageLimitGuidance}
 
 TODAY'S TASKS:
 ${taskContext}
@@ -237,6 +230,7 @@ COACHING GUIDELINES:
 - Keep responses 2-3 sentences max
 - Reference specific tasks when relevant
 - Build toward actionable insights
+${currentUserMessageCount >= 40 ? '- PRIORITY: Start guiding toward conversation completion' : ''}
 
 RESPONSE STYLE:
 - Warm and supportive tone
@@ -307,6 +301,13 @@ Keep it supportive and solution-focused. This summary will be saved as part of t
   const handleUserInput = async (input: string) => {
     if (!input.trim() || isProcessing || conversationComplete || isCompletingConversation) return
 
+    // Check message limit before processing
+    const currentUserMessages = conversation.filter(msg => msg.role === 'user').length
+    if (currentUserMessages >= 50) {
+      console.log('🎤 [VoiceCoachChat] Message limit reached, forcing conversation end')
+      handleConversationEnd()
+      return
+    }
 
     const userMessage: ConversationMessage = {
       role: 'user',
@@ -347,12 +348,12 @@ Keep it supportive and solution-focused. This summary will be saved as part of t
         setVoiceError('Voice synthesis failed for the response. You can continue with text input or try again.')
       }
 
-      // Check if conversation is complete after coach response - but don't auto-complete
+      // Check if conversation has reached a solution - show completion button if so
       try {
         const isComplete = await checkConversationCompletion(newConversation)
-        if (isComplete && !conversationComplete) {
-          console.log('🎤 [VoiceCoachChat] Conversation appears complete, but not auto-ending')
-          // Don't auto-complete - let user decide when to end
+        if (isComplete && !conversationComplete && !showCompletionButton) {
+          console.log('🎤 [VoiceCoachChat] OpenAI detected solution reached - showing completion button')
+          setShowCompletionButton(true)
         }
       } catch (error) {
         console.error('❌ [VoiceCoachChat] Error checking conversation completion:', error)
@@ -368,6 +369,61 @@ Keep it supportive and solution-focused. This summary will be saved as part of t
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       handleUserInput(currentInput)
+    }
+  }
+
+  const extractMoodAndMotivation = async (conversationHistory: ConversationMessage[]): Promise<{ mood: number, motivation: number }> => {
+    try {
+      const systemPrompt = `Analyze this coaching conversation and extract the user's mood and motivation levels based on their responses and emotional state.
+
+Rate on a scale of 1-10 where:
+- Mood: 1 = very negative/depressed, 5 = neutral, 10 = very positive/happy
+- Motivation: 1 = completely unmotivated/giving up, 5 = neutral, 10 = highly motivated/energized
+
+Consider:
+- Emotional language and tone
+- Attitude toward challenges
+- Willingness to try solutions
+- Overall energy level
+- Optimism vs pessimism
+- Sense of hope or defeat
+
+Respond with ONLY a JSON object in this exact format: {"mood": 5, "motivation": 5}
+Use integers only, no decimals.`
+
+      const conversationText = conversationHistory
+        .map(msg => `${msg.role}: ${msg.content}`)
+        .join('\n')
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: conversationText }
+        ],
+        temperature: 0.1,
+        max_tokens: 50
+      })
+
+      const result = response.choices[0]?.message?.content?.trim()
+      if (result) {
+        try {
+          const parsed = JSON.parse(result)
+          if (parsed.mood && parsed.motivation && 
+              parsed.mood >= 1 && parsed.mood <= 10 && 
+              parsed.motivation >= 1 && parsed.motivation <= 10) {
+            return { mood: parsed.mood, motivation: parsed.motivation }
+          }
+        } catch (parseError) {
+          console.error('Error parsing mood/motivation JSON:', parseError)
+        }
+      }
+      
+      // Fallback to neutral values
+      return { mood: 5, motivation: 5 }
+    } catch (error) {
+      console.error('Error extracting mood and motivation:', error)
+      return { mood: 5, motivation: 5 }
     }
   }
 
@@ -426,7 +482,10 @@ Keep it concise, supportive, and actionable. This will be spoken to the user.`
       const summary = await generateSessionSummary(conversation)
       setSessionSummary(summary)
       
-      // Update check-in data with blocker information
+      // Extract mood and motivation from conversation
+      const { mood, motivation } = await extractMoodAndMotivation(conversation)
+      
+      // Update check-in data with blocker information and extracted mood/motivation
       const blockerText = conversation
         .filter(msg => msg.role === 'user')
         .map(msg => msg.content)
@@ -435,13 +494,15 @@ Keep it concise, supportive, and actionable. This will be spoken to the user.`
 
       updateCheckInData({ 
         blocker: blockerText,
-        summary: summary
+        summary: summary,
+        mood: mood,
+        motivation: motivation
       })
 
-      // Speak insights message
-      const finalMessage = `${insights} Let's continue with your check-in to capture how you're feeling right now.`
-      
-      await speak(finalMessage)
+      console.log('🧠 [VoiceCoachChat] Extracted mood and motivation:', { mood, motivation })
+
+      // Speak insights message without the mood/motivation prompt
+      await speak(insights)
       
     } catch (error) {
       console.error('❌ [VoiceCoachChat] Error in conversation end:', error)
@@ -453,7 +514,7 @@ Keep it concise, supportive, and actionable. This will be spoken to the user.`
   }
 
   const handleContinue = () => {
-    setCurrentStep('mood')
+    setCurrentStep('complete')
   }
 
   // Auto-start conversation immediately when component mounts (if user already interacted)
@@ -594,14 +655,17 @@ Keep it concise, supportive, and actionable. This will be spoken to the user.`
             onChange={setCurrentInput}
             onVoiceTranscript={handleVoiceTranscript}
             onKeyDown={handleKeyPress}
-            placeholder={isCompletingConversation ? "Completing conversation..." : "Speak or type your response..."}
+            placeholder={
+              isCompletingConversation ? "Completing conversation..." :
+              "Speak or type your response..."
+            }
             voicePlaceholder="Share what's on your mind..."
-            disabled={isProcessing || isCompletingConversation}
-            showVoiceButton={!isCompletingConversation}
+            disabled={isProcessing || isCompletingConversation || isSpeaking || isPreparingSpeech}
+            showVoiceButton={!isCompletingConversation && !isSpeaking && !isPreparingSpeech}
           />
           
           {/* Submit Button */}
-          {currentInput.trim() && !isProcessing && !isCompletingConversation && (
+          {currentInput.trim() && !isProcessing && !isCompletingConversation && !isSpeaking && !isPreparingSpeech && (
             <div className="flex justify-center">
               <button
                 onClick={() => handleUserInput(currentInput)}
@@ -612,12 +676,17 @@ Keep it concise, supportive, and actionable. This will be spoken to the user.`
             </div>
           )}
           
-          {/* Manual conversation end button */}
-          {conversation.length >= 4 && !isProcessing && !conversationComplete && !isCompletingConversation && (
+          {/* Manual conversation end button - only show when criteria are met */}
+          {showCompletionButton && !isProcessing && !conversationComplete && !isCompletingConversation && !isSpeaking && !isPreparingSpeech && (
             <div className="text-center pt-6 border-t border-border/30 mt-6">
               <div className="pt-4 space-y-4">
                 <p className="text-sm text-muted-foreground">
-                  Feel free to continue sharing, or wrap up when you're ready.
+                  {userMessageCount >= 45 
+                    ? `Message limit almost reached (${userMessageCount}/50). Please wrap up the conversation.`
+                    : userMessageCount >= 40 
+                      ? `You're approaching the message limit (${userMessageCount}/50). Consider wrapping up when ready.`
+                      : "It sounds like you've found some clarity. You can continue sharing or wrap up when ready."
+                  }
                 </p>
                 <button
                   onClick={handleConversationEnd}
@@ -629,9 +698,14 @@ Keep it concise, supportive, and actionable. This will be spoken to the user.`
             </div>
           )}
           
-          {isProcessing && (
+          {(isProcessing || isSpeaking || isPreparingSpeech) && (
             <div className="text-center text-sm text-muted-foreground">
-              <p>Processing your response...</p>
+              <p>
+                {isSpeaking || isPreparingSpeech 
+                  ? "Coach is speaking - please wait..." 
+                  : "Processing your response..."
+                }
+              </p>
             </div>
           )}
         </div>
@@ -666,70 +740,59 @@ Keep it concise, supportive, and actionable. This will be spoken to the user.`
         </div>
       )}
 
-      {/* Time indicator with visual timer */}
+      {/* Message counter and conversation status */}
       {hasStarted && !conversationComplete && (
         <div className="text-center text-xs text-muted-foreground">
-          {(() => {
-            const timeElapsed = currentTime - chatStartTime.current.getTime()
-            const minutesElapsed = Math.floor(timeElapsed / 60000)
-            const secondsElapsed = Math.floor((timeElapsed % 60000) / 1000)
-            const totalMinutesLimit = 10
-            const timeRemaining = Math.max(0, (totalMinutesLimit * 60) - Math.floor(timeElapsed / 1000))
-            const minutesRemaining = Math.floor(timeRemaining / 60)
-            const secondsRemaining = timeRemaining % 60
-            const progressPercentage = Math.min(100, (timeElapsed / (totalMinutesLimit * 60 * 1000)) * 100)
-            
-            const userMessages = conversation.filter(msg => msg.role === 'user').length
-            const conversationStage = userMessages <= 1 ? 'Getting Started' : 
-                                   userMessages <= 4 ? 'Exploring Blockers' : 
-                                   userMessages <= 6 ? 'Building Solutions' : 'Gaining Insights'
-            
-            return (
-              <div className="space-y-3">
-                {/* Visual Timer Bar */}
-                <div className="max-w-md mx-auto">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-xs font-medium">Conversation Timer</span>
-                    <span className="text-xs font-mono">
-                      {String(minutesRemaining).padStart(2, '0')}:{String(secondsRemaining).padStart(2, '0')} left
-                    </span>
-                  </div>
-                  <div className="w-full bg-muted/40 rounded-full h-2">
-                    <div 
-                      className={`h-2 rounded-full transition-all duration-1000 ${
-                        progressPercentage > 80 ? 'bg-red-500' : 
-                        progressPercentage > 60 ? 'bg-yellow-500' : 
-                        'bg-blue-500'
-                      }`}
-                      style={{ width: `${progressPercentage}%` }}
-                    />
-                  </div>
-                </div>
-                
-                {/* Status Info */}
-                <p>
-                  Time: {minutesElapsed}:{String(secondsElapsed).padStart(2, '0')} • Stage: {conversationStage} • Messages: {userMessages}
-                </p>
-                
-                {conversation.length >= 4 && (
-                  <p className="text-green-600 dark:text-green-400">
-                    You can continue sharing or use the button above to wrap up when ready
-                  </p>
-                )}
-                {conversation.length < 4 && (
-                  <p className="text-blue-600 dark:text-blue-400">
-                    Continue sharing - I'm here to help you work through this
-                  </p>
-                )}
-                
-                {progressPercentage > 80 && (
-                  <p className="text-red-600 dark:text-red-400 font-medium">
-                    Time is running low - consider wrapping up soon
-                  </p>
-                )}
+          <div className="space-y-3">
+            {/* Visual Progress Bar based on messages */}
+            <div className="max-w-md mx-auto">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-xs font-medium">Conversation Progress</span>
+                <span className="text-xs font-mono">
+                  {userMessageCount}/50 messages
+                </span>
               </div>
-            )
-          })()}
+              <div className="w-full bg-muted/40 rounded-full h-2">
+                <div 
+                  className={`h-2 rounded-full transition-all duration-500 ${
+                    userMessageCount >= 45 ? 'bg-red-500' : 
+                    userMessageCount >= 35 ? 'bg-yellow-500' : 
+                    'bg-blue-500'
+                  }`}
+                  style={{ width: `${Math.min(100, (userMessageCount / 50) * 100)}%` }}
+                />
+              </div>
+            </div>
+            
+            {/* Status Info */}
+            <p>
+              Stage: {userMessageCount <= 1 ? 'Getting Started' : 
+                     userMessageCount <= 4 ? 'Exploring Blockers' : 
+                     userMessageCount <= 6 ? 'Building Solutions' : 'Gaining Insights'} • Messages: {userMessageCount}/50
+            </p>
+            
+            {showCompletionButton && (
+              <p className="text-green-600 dark:text-green-400">
+                You can continue sharing or use the button above to wrap up when ready
+              </p>
+            )}
+            {!showCompletionButton && (
+              <p className="text-blue-600 dark:text-blue-400">
+                Continue sharing - I'm here to help you work through this
+              </p>
+            )}
+            
+            {userMessageCount >= 45 && (
+              <p className="text-red-600 dark:text-red-400 font-medium">
+                Message limit almost reached - please wrap up soon
+              </p>
+            )}
+            {userMessageCount >= 35 && userMessageCount < 45 && (
+              <p className="text-yellow-600 dark:text-yellow-400 font-medium">
+                Approaching message limit - consider preparing to wrap up
+              </p>
+            )}
+          </div>
         </div>
       )}
     </div>
