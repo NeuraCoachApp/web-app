@@ -22,7 +22,41 @@ export class Session {
     this.mood = data.mood
     this.motivation = data.motivation
     this.blocker = data.blocker
-    this.completion = data.completion || []
+    this.completion = this.parseCompletion(data.completion)
+  }
+
+  /**
+   * Parse completion data from database format
+   * Handles both object format and PostgreSQL composite type string format
+   */
+  private parseCompletion(rawCompletion: any): Database["public"]["CompositeTypes"]["task_completion"][] {
+    if (!rawCompletion) return []
+    
+    // If it's already in the correct object format, return as-is
+    if (Array.isArray(rawCompletion) && rawCompletion.length > 0) {
+      const firstItem = rawCompletion[0]
+      if (typeof firstItem === 'object' && 'task_uuid' in firstItem) {
+        return rawCompletion
+      }
+      
+      // If it's an array of PostgreSQL composite type strings like ["(uuid,f)","(uuid,t)"]
+      if (typeof firstItem === 'string' && firstItem.startsWith('(')) {
+        return rawCompletion.map((item: string) => {
+          // Parse string format "(uuid,boolean)" 
+          const match = item.match(/^\(([^,]+),([ft])\)$/)
+          if (match) {
+            return {
+              task_uuid: match[1],
+              iscompleted: match[2] === 't'
+            }
+          }
+          console.warn('Could not parse completion item:', item)
+          return { task_uuid: null, iscompleted: false }
+        })
+      }
+    }
+    
+    return []
   }
 
   /**
