@@ -36,6 +36,14 @@ export function CheckInComplete() {
   } | null>(null)
 
   const handleSubmitCheckIn = useCallback(async () => {
+    // Prevent duplicate submissions
+    if (hasSubmitted) {
+      console.log('🚫 [CheckInComplete] Submission already in progress or completed, skipping')
+      return
+    }
+    
+    setHasSubmitted(true) // Set this immediately to prevent duplicate calls
+    
     try {
       // Step 1: Submit the check-in
       const result = await submitCheckIn()
@@ -69,11 +77,11 @@ export function CheckInComplete() {
           
           setAdjustmentResult(adjustmentResult)
           
-          // Invalidate caches to refresh task data
+          // Only invalidate caches if adjustments were actually made
           if (user && adjustmentResult.adjustmentsMade) {
+            console.log('🔄 [CheckInComplete] Invalidating goal cache due to task adjustments')
             await queryClient.invalidateQueries({ queryKey: goalsKeys.user(user.id) })
-            await queryClient.invalidateQueries({ queryKey: checkInKeys.todaysTasks(selectedGoal.uuid) })
-            await queryClient.invalidateQueries({ queryKey: checkInKeys.dailyProgress(selectedGoal.uuid) })
+            // Don't invalidate other queries unless necessary - they'll refresh naturally when navigating back
           }
           
           console.log('✅ [CheckInComplete] AI task adjustment completed:', adjustmentResult)
@@ -93,17 +101,19 @@ export function CheckInComplete() {
       }
       
     } catch (error) {
-      console.error('Error submitting check-in:', error)
-      // Handle error - could show error message
+      console.error('❌ [CheckInComplete] Error submitting check-in:', error)
+      // Reset hasSubmitted on error so user can retry
+      setHasSubmitted(false)
     }
-  }, [submitCheckIn, selectedGoal, todaysTasks, checkInData, getProgressPercentage, user, queryClient, userStreak])
+  }, [submitCheckIn, selectedGoal, todaysTasks, checkInData, getProgressPercentage, user, queryClient, userStreak, hasSubmitted])
 
   useEffect(() => {
-    if (!hasSubmitted) {
+    // Only run once when component mounts
+    if (!hasSubmitted && !isSubmitting) {
+      console.log('🎯 [CheckInComplete] Component mounted, triggering submission')
       handleSubmitCheckIn()
-      setHasSubmitted(true)
     }
-  }, [hasSubmitted, handleSubmitCheckIn])
+  }, []) // Remove dependencies to ensure this only runs once
 
   const handleReturnToDashboard = () => {
     router.push('/dashboard')

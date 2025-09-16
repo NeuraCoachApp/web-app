@@ -10,6 +10,9 @@ export interface AggregatedMetrics {
   effort: MetricData[]
   stress: MetricData[]
   progress: MetricData[]
+  mood: MetricData[]
+  motivation: MetricData[]
+  sessionCompletion: MetricData[]
 }
 
 export interface InsightsProps {

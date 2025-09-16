@@ -44,7 +44,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     enabled: !!user, // Only query when user is authenticated
     staleTime: 5 * 60 * 1000, // 5 minutes - longer stale time
     gcTime: 10 * 60 * 1000, // 10 minutes
-    refetchInterval: 60 * 1000, // Refetch every minute to keep time window current
     refetchOnMount: false, // Don't refetch on component mount if data is fresh
     refetchOnReconnect: false, // Don't refetch on reconnect if data is fresh
     refetchOnWindowFocus: false, // Don't refetch on window focus (already disabled globally)

@@ -58,15 +58,22 @@ export function CheckInProvider({ children }: CheckInProviderProps) {
   
   const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null)
   
-  // Get user's goals
-  const { goals, isLoading: goalsLoading } = useGoals(user?.id)
-  
   // Check-in flow hook
   const checkInFlow = useCheckInFlow()
   
-  // Data hooks
-  const { data: dailyProgress, isLoading: progressLoading, error: progressError } = useDailyProgress(selectedGoal?.uuid)
-  const { data: userStreak, isLoading: streakLoading } = useUserStreak(user?.id)
+  // Data hooks - disable refetching during chat step to reduce RPC calls
+  const isInChatStep = checkInFlow.currentStep === 'chat'
+  
+  // Get user's goals - disable refetching during chat step to reduce RPC calls
+  const { goals, isLoading: goalsLoading } = useGoals(user?.id, { enabled: !isInChatStep })
+  const { data: dailyProgress, isLoading: progressLoading, error: progressError } = useDailyProgress(
+    selectedGoal?.uuid, 
+    { enabled: !isInChatStep }
+  )
+  const { data: userStreak, isLoading: streakLoading } = useUserStreak(
+    user?.id, 
+    { enabled: !isInChatStep }
+  )
   const { data: todaysTasks, isLoading: tasksLoading } = useTodaysTasks(selectedGoal?.uuid)
   
   // Redirect to auth if not authenticated

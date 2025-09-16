@@ -44,6 +44,7 @@ export function VoiceCoachChat() {
   const [retryCount, setRetryCount] = useState(0)
   const [showCompletionButton, setShowCompletionButton] = useState(false)
   const [userMessageCount, setUserMessageCount] = useState(0)
+  const [autoCompleted, setAutoCompleted] = useState(false)
   const conversationInitialized = useRef<boolean>(false)
 
   // Clear preview message when component unmounts
@@ -130,12 +131,54 @@ export function VoiceCoachChat() {
     }
   }, [getProgressPercentage, todaysTasks, speak, setPreviewMessage])
 
+  // Check if the AI's latest response contains questions
+  const checkAIResponseHasQuestions = async (aiResponse: string): Promise<boolean> => {
+    try {
+      const systemPrompt = `Analyze this AI coaching response to determine if it contains any questions or prompts for the user to continue the conversation.
+
+Look for:
+1. Direct questions (ending with ?)
+2. Implicit questions or prompts for more information
+3. Requests for clarification or elaboration
+4. Invitations to share more details
+5. Open-ended statements that expect a response
+
+The response does NOT contain questions if it:
+1. Is a concluding statement or goodbye
+2. Provides final insights or encouragement
+3. Summarizes what was discussed without asking for more
+4. Gives closure to the conversation
+5. Is purely supportive without seeking more input
+
+Respond with ONLY "HAS_QUESTIONS" or "NO_QUESTIONS" - no other text.`
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: aiResponse }
+        ],
+        temperature: 0.1,
+        max_tokens: 10
+      })
+
+      const result = response.choices[0]?.message?.content?.trim().toUpperCase()
+      console.log('🎤 [VoiceCoachChat] AI response question check result:', result)
+      return result === 'HAS_QUESTIONS'
+    } catch (error) {
+      console.error('Error checking AI response for questions:', error)
+      // Fallback: assume it has questions to avoid premature ending
+      return true
+    }
+  }
+
   // Check if the conversation has reached a natural conclusion
   const checkConversationCompletion = async (conversationHistory: ConversationMessage[]): Promise<boolean> => {
     // Only check after minimum meaningful conversation (6+ messages) - increased threshold
     if (conversationHistory.length < 6) return false
 
     try {
+      // First check if the user has reached a solution
       const systemPrompt = `Analyze this coaching conversation to determine if the user has reached a SOLUTION or meaningful insight about their challenges.
 
 The conversation has reached a SOLUTION when:
@@ -171,9 +214,22 @@ Respond with ONLY "COMPLETE" or "CONTINUE" - no other text.`
         max_tokens: 10
       })
 
-      const result = response.choices[0]?.message?.content?.trim().toUpperCase()
-      console.log('🎤 [VoiceCoachChat] Conversation completion check result:', result)
-      return result === 'COMPLETE'
+      const userHasSolution = response.choices[0]?.message?.content?.trim().toUpperCase() === 'COMPLETE'
+      console.log('🎤 [VoiceCoachChat] User solution check result:', userHasSolution)
+
+      // If user has a solution, also check if the AI's latest response contains questions
+      if (userHasSolution) {
+        const lastAIMessage = conversationHistory.filter(msg => msg.role === 'assistant').pop()
+        if (lastAIMessage) {
+          const aiHasQuestions = await checkAIResponseHasQuestions(lastAIMessage.content)
+          console.log('🎤 [VoiceCoachChat] AI has questions:', aiHasQuestions)
+          
+          // Only mark as complete if user has solution AND AI didn't ask more questions
+          return !aiHasQuestions
+        }
+      }
+
+      return false
     } catch (error) {
       console.error('Error checking conversation completion:', error)
       // Fallback: never auto-complete due to error
@@ -234,9 +290,17 @@ ${currentUserMessageCount >= 40 ? '- PRIORITY: Start guiding toward conversation
 
 RESPONSE STYLE:
 - Warm and supportive tone
-- Ask one focused question per response
+- Ask one focused question per response (EXCEPT when providing final insights)
 - Validate their feelings first
-- Connect responses to their specific tasks and goal`
+- Connect responses to their specific tasks and goal
+
+IMPORTANT: When the user has gained clarity, actionable insights, or shows they understand what went wrong and how to fix it, provide a CONCLUDING statement WITHOUT questions. Use phrases like:
+- "It sounds like you have a clear path forward..."
+- "I'm glad we could work through this together..."
+- "You've identified some great strategies..."
+- "I believe you're well-equipped to tackle tomorrow..."
+
+These concluding statements should NOT contain questions and should signal the natural end of the conversation.`
 
       const response = await openai.chat.completions.create({
         model: "gpt-4o-mini",
@@ -348,11 +412,22 @@ Keep it supportive and solution-focused. This summary will be saved as part of t
         setVoiceError('Voice synthesis failed for the response. You can continue with text input or try again.')
       }
 
-      // Check if conversation has reached a solution - show completion button if so
+      // Check if conversation has reached a solution and AI gave concluding response
       try {
         const isComplete = await checkConversationCompletion(newConversation)
-        if (isComplete && !conversationComplete && !showCompletionButton) {
-          console.log('🎤 [VoiceCoachChat] OpenAI detected solution reached - showing completion button')
+        if (isComplete && !conversationComplete) {
+          console.log('🎤 [VoiceCoachChat] Conversation naturally completed - AI gave concluding statement without questions')
+          
+          // Mark as auto-completed and wait for the AI's speech to finish before automatically ending
+          setAutoCompleted(true)
+          setTimeout(() => {
+            if (!conversationComplete) {
+              console.log('🎤 [VoiceCoachChat] Auto-ending conversation after AI concluded')
+              handleConversationEnd()
+            }
+          }, 2000) // Give 2 seconds for speech to finish
+        } else if (!showCompletionButton && userMessageCount >= 6) {
+          // Show manual completion button if no auto-completion but conversation is substantial
           setShowCompletionButton(true)
         }
       } catch (error) {
@@ -646,8 +721,8 @@ Keep it concise, supportive, and actionable. This will be spoken to the user.`
         </div>
       )}
 
-      {/* Voice Input */}
-      {!conversationComplete && hasStarted && (
+      {/* Voice Input - hidden when auto-completed or conversation complete */}
+      {!conversationComplete && !autoCompleted && hasStarted && (
         <div className="space-y-4">
           <FlowInput
             type="text"
@@ -676,8 +751,8 @@ Keep it concise, supportive, and actionable. This will be spoken to the user.`
             </div>
           )}
           
-          {/* Manual conversation end button - only show when criteria are met */}
-          {showCompletionButton && !isProcessing && !conversationComplete && !isCompletingConversation && !isSpeaking && !isPreparingSpeech && (
+          {/* Manual conversation end button - only show when criteria are met and not auto-completed */}
+          {showCompletionButton && !autoCompleted && !isProcessing && !conversationComplete && !isCompletingConversation && !isSpeaking && !isPreparingSpeech && (
             <div className="text-center pt-6 border-t border-border/30 mt-6">
               <div className="pt-4 space-y-4">
                 <p className="text-sm text-muted-foreground">

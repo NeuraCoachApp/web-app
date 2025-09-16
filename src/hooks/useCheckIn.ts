@@ -58,7 +58,7 @@ export const checkInKeys = {
 /**
  * Hook to get today's daily progress for a goal
  */
-export function useDailyProgress(goalUuid?: string) {
+export function useDailyProgress(goalUuid?: string, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: checkInKeys.dailyProgress(goalUuid || ''),
     queryFn: async (): Promise<DailyProgress> => {
@@ -77,16 +77,18 @@ export function useDailyProgress(goalUuid?: string) {
 
       return data as unknown as DailyProgress
     },
-    enabled: !!goalUuid,
+    enabled: !!goalUuid && (options?.enabled !== false),
     staleTime: 5 * 60 * 1000, // 5 minutes - aligned with useGoals for better caching
     gcTime: 10 * 60 * 1000, // 10 minutes
+    refetchOnWindowFocus: false, // Disable refetch on focus during check-in
+    refetchOnReconnect: false, // Disable refetch on reconnect during check-in
   })
 }
 
 /**
  * Hook to get user's current streak
  */
-export function useUserStreak(userId?: string) {
+export function useUserStreak(userId?: string, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: checkInKeys.userStreak(userId || ''),
     queryFn: async (): Promise<UserStreak> => {
@@ -105,9 +107,11 @@ export function useUserStreak(userId?: string) {
 
       return data as unknown as UserStreak
     },
-    enabled: !!userId,
+    enabled: !!userId && (options?.enabled !== false),
     staleTime: 5 * 60 * 1000, // 5 minutes - aligned with useGoals for better caching
     gcTime: 10 * 60 * 1000, // 10 minutes
+    refetchOnWindowFocus: false, // Disable refetch on focus during check-in
+    refetchOnReconnect: false, // Disable refetch on reconnect during check-in
   })
 }
 
@@ -157,8 +161,6 @@ export function useTodaysTasks(goalUuid?: string) {
   })
 }
 
-// useCanCheckInNow hook moved to AuthContext for better separation of concerns
-
 /**
  * Hook to create a check-in session
  */
@@ -185,20 +187,40 @@ export function useCreateCheckIn() {
       return data as unknown as CheckInSession
     },
     onSuccess: (data, variables) => {
-      // Invalidate related queries
-      queryClient.invalidateQueries({ queryKey: checkInKeys.dailyProgress(variables.goal_uuid) })
-      queryClient.invalidateQueries({ queryKey: checkInKeys.userStreak(user?.id || '') })
-      queryClient.invalidateQueries({ queryKey: checkInKeys.todaysTasks(variables.goal_uuid) })
+      // Only invalidate essential queries that are likely to be stale after check-in
+      // Use setQueryData where possible instead of invalidation to avoid unnecessary refetches
       
-      // Also invalidate goals data since task completion status may have changed AND new session was created
-      queryClient.invalidateQueries({ queryKey: ['goals'] })
-      queryClient.invalidateQueries({ queryKey: ['goals', 'user', user?.id || ''] })
-      
-      console.log('✅ [useCreateCheckIn] Session created successfully, invalidated caches:', {
+      console.log('✅ [useCreateCheckIn] Session created successfully:', {
         sessionUuid: data.uuid,
         goalUuid: variables.goal_uuid,
         userId: user?.id
       })
+      
+      // Update user streak data directly if we have it
+      const userStreakKey = checkInKeys.userStreak(user?.id || '')
+      const currentStreak = queryClient.getQueryData(userStreakKey) as any
+      if (currentStreak && data.streak_updated) {
+        queryClient.setQueryData(userStreakKey, {
+          ...currentStreak,
+          daily_streak: (currentStreak.daily_streak || 0) + 1,
+          can_check_in_today: false,
+          last_check_in_date: new Date().toISOString().split('T')[0]
+        })
+        console.log('📊 [useCreateCheckIn] Updated streak data directly in cache')
+      } else {
+        // Only invalidate if we can't update directly
+        queryClient.invalidateQueries({ queryKey: userStreakKey })
+      }
+      
+      // Invalidate only the specific goal's data, not all goals
+      if (user?.id) {
+        queryClient.invalidateQueries({ queryKey: ['goals', 'user', user.id] })
+      }
+      
+      // These queries are less likely to change, so we can skip invalidating them
+      // unless we know they're affected by the check-in submission
+      // queryClient.invalidateQueries({ queryKey: checkInKeys.dailyProgress(variables.goal_uuid) })
+      // queryClient.invalidateQueries({ queryKey: checkInKeys.todaysTasks(variables.goal_uuid) })
     }
   })
 }

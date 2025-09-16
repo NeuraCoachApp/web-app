@@ -274,7 +274,7 @@ async function updateTaskCompletion(
  * Comprehensive hook for managing all goal-related functionality
  * Single source of truth using get_batch_goal_object RPC function
  */
-export function useGoals(userId?: string) {
+export function useGoals(userId?: string, options?: { enabled?: boolean }) {
   const queryClient = useQueryClient()
   const { user } = useAuth()
 
@@ -289,9 +289,11 @@ export function useGoals(userId?: string) {
       
       return await fetchUserGoals(userId)
     },
-    enabled: !!userId,
+    enabled: !!userId && (options?.enabled !== false),
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 10 * 60 * 1000, // 10 minutes
+    refetchOnWindowFocus: false, // Disable refetch on focus during check-in
+    refetchOnReconnect: false, // Disable refetch on reconnect during check-in
   })
 
   // Mutation for creating goals

@@ -4,7 +4,7 @@ import { AggregatedMetrics, MetricData } from './types'
 
 export function calculateAggregatedMetrics(goal: Goal | null): AggregatedMetrics {
   if (!goal) {
-    return { effort: [], stress: [], progress: [] }
+    return { effort: [], stress: [], progress: [], mood: [], motivation: [], sessionCompletion: [] }
   }
 
   // Collect all sessions from all steps
@@ -41,6 +41,9 @@ export function calculateAggregatedMetrics(goal: Goal | null): AggregatedMetrics
   const effort: MetricData[] = []
   const stress: MetricData[] = []
   const progress: MetricData[] = []
+  const mood: MetricData[] = []
+  const motivation: MetricData[] = []
+  const sessionCompletion: MetricData[] = []
 
   Object.entries(sessionsByDate).forEach(([date, sessions]) => {
     // Sessions now have direct properties instead of insights
@@ -58,6 +61,9 @@ export function calculateAggregatedMetrics(goal: Goal | null): AggregatedMetrics
     const avgEffort = validSessions.reduce((sum, s) => sum + (s.motivation || 0), 0) / validSessions.length
     const avgStress = validSessions.reduce((sum, s) => sum + (10 - s.mood || 0), 0) / validSessions.length // Inverse mood as stress
     const avgProgress = validSessions.reduce((sum, s) => sum + (s.mood * 10 || 0), 0) / validSessions.length // Use mood as progress indicator
+    const avgMood = validSessions.reduce((sum, s) => sum + (s.mood || 0), 0) / validSessions.length
+    const avgMotivation = validSessions.reduce((sum, s) => sum + (s.motivation || 0), 0) / validSessions.length
+    const avgSessionCompletion = validSessions.reduce((sum, s) => sum + s.getCompletionPercentage(), 0) / validSessions.length
     
     // Use the most recent session's summary for that date
     const latestSession = validSessions[validSessions.length - 1]
@@ -80,8 +86,26 @@ export function calculateAggregatedMetrics(goal: Goal | null): AggregatedMetrics
         value: Math.round(avgProgress),
         summary: latestSession.summary
       })
+      
+      mood.push({
+        date,
+        value: Math.round(avgMood * 10) / 10,
+        summary: latestSession.summary
+      })
+      
+      motivation.push({
+        date,
+        value: Math.round(avgMotivation * 10) / 10,
+        summary: latestSession.summary
+      })
+      
+      sessionCompletion.push({
+        date,
+        value: Math.round(avgSessionCompletion),
+        summary: latestSession.summary
+      })
     }
   })
 
-  return { effort, stress, progress }
+  return { effort, stress, progress, mood, motivation, sessionCompletion }
 }
