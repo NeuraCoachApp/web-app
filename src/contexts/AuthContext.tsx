@@ -45,6 +45,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     staleTime: 5 * 60 * 1000, // 5 minutes - longer stale time
     gcTime: 10 * 60 * 1000, // 10 minutes
     refetchInterval: 60 * 1000, // Refetch every minute to keep time window current
+    refetchOnMount: false, // Don't refetch on component mount if data is fresh
+    refetchOnReconnect: false, // Don't refetch on reconnect if data is fresh
+    refetchOnWindowFocus: false, // Don't refetch on window focus (already disabled globally)
+    // Only refetch if the data is actually stale and the refetch interval has passed
+    refetchIntervalInBackground: false, // Don't refetch when tab is not active
   })
 
   const loading = useMemo(() => {
