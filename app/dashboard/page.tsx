@@ -86,6 +86,7 @@ export default function Dashboard() {
         selectedGoalIndex={selectedGoalIndex}
         onGoalChange={setSelectedGoalIndex}
         onSignOut={handleSignOut}
+        onSettingsClick={() => router.push('/dashboard/settings')}
       />
 
       {/* Dashboard Navigation Tabs */}

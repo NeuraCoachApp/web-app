@@ -9,6 +9,7 @@ export type Profile = Tables<'profile'>
 export type ProfileUpdate = {
   first_name?: string | null
   last_name?: string | null
+  notification_time?: string | null
 }
 
 // Query keys for React Query
@@ -26,8 +27,8 @@ async function getOrCreateProfile(userUuid: string): Promise<{ data: Profile | n
     p_user_uuid: userUuid
   })
 
-  // RPC returns a single object or null
-  return { data, error }
+  // RPC now returns an array, so take the first item
+  return { data: data?.[0] || null, error }
 }
 
 /**
@@ -38,7 +39,8 @@ async function updateProfile(userUuid: string, updates: ProfileUpdate): Promise<
   const { error: updateError } = await supabase.rpc('update_profile', {
     p_user_uuid: userUuid,
     p_first_name: updates.first_name || undefined,
-    p_last_name: updates.last_name || undefined
+    p_last_name: updates.last_name || undefined,
+    p_notification_time: updates.notification_time || undefined
   })
 
   if (updateError) return { data: null, error: updateError }

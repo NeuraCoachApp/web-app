@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { Globe, LogOut, User, ChevronDown, Flame } from 'lucide-react'
+import { Globe, LogOut, User, ChevronDown, Flame, Settings } from 'lucide-react'
 import { ThemeToggle } from '@/src/components/ui/theme-toggle'
 import { Goal } from '@/src/classes/Goal'
 import { useUserStreak } from '@/src/hooks/useCheckIn'
@@ -13,6 +13,7 @@ interface DashboardHeaderProps {
   selectedGoalIndex: number
   onGoalChange: (index: number) => void
   onSignOut: () => void
+  onSettingsClick?: () => void
 }
 
 export default function DashboardHeader({ 
@@ -20,7 +21,8 @@ export default function DashboardHeader({
   goals, 
   selectedGoalIndex, 
   onGoalChange, 
-  onSignOut 
+  onSignOut,
+  onSettingsClick
 }: DashboardHeaderProps) {
   const selectedGoal = goals[selectedGoalIndex]
   const { user } = useAuth()
@@ -94,6 +96,15 @@ export default function DashboardHeader({
               <span className="hidden sm:inline">{userEmail}</span>
             </div>
             <ThemeToggle />
+            {onSettingsClick && (
+              <button
+                onClick={onSettingsClick}
+                className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-muted/50"
+              >
+                <Settings className="w-4 h-4" />
+                <span className="hidden sm:inline">Settings</span>
+              </button>
+            )}
             <button
               onClick={onSignOut}
               className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-muted/50"

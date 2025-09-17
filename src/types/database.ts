@@ -80,31 +80,37 @@ export type Database = {
       }
       profile: {
         Row: {
+          coach_link: string
           created_at: string
           daily_streak: number | null
           first_name: string | null
           last_check_in_date: string | null
           last_name: string | null
+          notification_time: string
           subscription_status: string | null
           updated_at: string
           uuid: string
         }
         Insert: {
+          coach_link?: string
           created_at?: string
           daily_streak?: number | null
           first_name?: string | null
           last_check_in_date?: string | null
           last_name?: string | null
+          notification_time?: string
           subscription_status?: string | null
           updated_at?: string
           uuid: string
         }
         Update: {
+          coach_link?: string
           created_at?: string
           daily_streak?: number | null
           first_name?: string | null
           last_check_in_date?: string | null
           last_name?: string | null
+          notification_time?: string
           subscription_status?: string | null
           updated_at?: string
           uuid?: string
@@ -251,7 +257,7 @@ export type Database = {
           first_name: string
           last_name: string
           updated_at: string
-          user_uuid: string
+          uuid: string
         }[]
       }
       create_task: {
@@ -292,15 +298,17 @@ export type Database = {
       get_profile: {
         Args: { p_user_uuid: string }
         Returns: {
+          coach_link: string
           created_at: string
-          daily_streak: number | null
-          first_name: string | null
-          last_check_in_date: string | null
-          last_name: string | null
-          subscription_status: string | null
+          daily_streak: number
+          first_name: string
+          last_check_in_date: string
+          last_name: string
+          notification_time: string
+          subscription_status: string
           updated_at: string
           uuid: string
-        }
+        }[]
       }
       get_todays_tasks_for_checkin: {
         Args: { p_goal_uuid: string }
@@ -318,6 +326,7 @@ export type Database = {
         Args: {
           p_first_name?: string
           p_last_name?: string
+          p_notification_time?: string
           p_user_uuid: string
         }
         Returns: {
@@ -325,7 +334,7 @@ export type Database = {
           first_name: string
           last_name: string
           updated_at: string
-          user_uuid: string
+          uuid: string
         }[]
       }
       update_task_completion: {

@@ -7,7 +7,8 @@ import { Task } from '@/src/classes/Task'
 import { getTodaysTasks } from '../timeline/utils'
 import { useUserStreak } from '@/src/hooks/useCheckIn'
 import { useAuth } from '@/src/contexts/AuthContext'
-import { Calendar, Square, CheckSquare, MessageCircle, Clock } from 'lucide-react'
+import { useProfile } from '@/src/hooks/useProfile'
+import { Calendar, Square, CheckSquare, MessageCircle, Clock, ExternalLink } from 'lucide-react'
 
 interface DailyTaskListProps {
   goal: Goal | null
@@ -69,6 +70,7 @@ export default function DailyTaskList({ goal, onTaskToggle }: DailyTaskListProps
   
   // Check-in related hooks
   const { data: userStreak } = useUserStreak(user?.id)
+  const { data: profile } = useProfile(user?.id)
   
   // Update current time every minute to refresh check-in status
   useEffect(() => {
@@ -327,6 +329,31 @@ export default function DailyTaskList({ goal, onTaskToggle }: DailyTaskListProps
               />
             </div>
           </div>
+
+          {/* Coach Link */}
+          {profile?.coach_link && (
+            <div className="p-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl shadow-lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-1">
+                    Need personalized guidance?
+                  </h3>
+                  <p className="text-xs text-blue-700 dark:text-blue-300">
+                    Book a session with your personal coach
+                  </p>
+                </div>
+                <a
+                  href={profile.coach_link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+                >
+                  Book Session
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
