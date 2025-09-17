@@ -1,19 +1,49 @@
 import { Goal } from '@/src/classes/Goal'
 import { Session } from '@/src/classes/Session'
 import { AggregatedMetrics, MetricData } from './types'
+import { TimeframeOption } from './TimeframeSelector'
 
-export function calculateAggregatedMetrics(goal: Goal | null): AggregatedMetrics {
+export function filterSessionsByTimeframe(sessions: Session[], timeframe: TimeframeOption): Session[] {
+  if (timeframe === 'all') return sessions
+
+  const now = new Date()
+  let cutoffDate: Date
+
+  switch (timeframe) {
+    case 'week':
+      cutoffDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+      break
+    case 'month':
+      cutoffDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+      break
+    case 'quarter':
+      cutoffDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
+      break
+    case 'year':
+      cutoffDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000)
+      break
+    default:
+      return sessions
+  }
+
+  return sessions.filter(session => new Date(session.created_at) >= cutoffDate)
+}
+
+export function calculateAggregatedMetrics(goal: Goal | null, timeframe: TimeframeOption = 'all'): AggregatedMetrics {
   if (!goal) {
     return { effort: [], stress: [], progress: [], mood: [], motivation: [], sessionCompletion: [] }
   }
 
-  // Collect all sessions from all steps
+  // Collect all sessions from all steps and filter by timeframe
   const allSessions: Session[] = goal.getSessions()
+  const filteredSessions = filterSessionsByTimeframe(allSessions, timeframe)
   
   console.log('🔍 [calculateAggregatedMetrics] Debug info:', {
     goalUuid: goal.uuid,
-    sessionsCount: allSessions.length,
-    sessions: allSessions.map(s => ({
+    timeframe: timeframe,
+    allSessionsCount: allSessions.length,
+    filteredSessionsCount: filteredSessions.length,
+    sessions: filteredSessions.map(s => ({
       uuid: s.uuid,
       created_at: s.created_at,
       mood: s.mood,
@@ -22,8 +52,8 @@ export function calculateAggregatedMetrics(goal: Goal | null): AggregatedMetrics
     }))
   })
   
-  // Sort sessions by date
-  const sortedSessions = allSessions.sort((a, b) => 
+  // Sort filtered sessions by date
+  const sortedSessions = filteredSessions.sort((a, b) => 
     new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
   )
 

@@ -19,6 +19,10 @@ export { default as MoodTrendChart } from './MoodTrendChart'
 export { default as MotivationTrendChart } from './MotivationTrendChart'
 export { default as SessionCompletionChart } from './SessionCompletionChart'
 
+// New timeframe and report components
+export { default as TimeframeSelector } from './TimeframeSelector'
+export { default as WeeklyReport } from './WeeklyReport'
+
 // Types and utilities
 export * from './types'
 export * from './utils'
