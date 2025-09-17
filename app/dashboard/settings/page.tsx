@@ -28,6 +28,13 @@ interface FormErrors {
   general?: string
 }
 
+interface OriginalData {
+  firstName: string
+  lastName: string
+  email: string
+  notificationTime: string
+}
+
 export default function SettingsPage() {
   const { user, signOut } = useAuth()
   const { data: profile, isLoading: profileLoading } = useProfile(user?.id)
@@ -44,6 +51,13 @@ export default function SettingsPage() {
     confirmPassword: ''
   })
 
+  const [originalData, setOriginalData] = useState<OriginalData>({
+    firstName: '',
+    lastName: '',
+    email: '',
+    notificationTime: '09:00'
+  })
+
   const [errors, setErrors] = useState<FormErrors>({})
   const [showPassword, setShowPassword] = useState(false)
   const [showNewPassword, setShowNewPassword] = useState(false)
@@ -55,13 +69,19 @@ export default function SettingsPage() {
   // Initialize form data when profile loads
   useEffect(() => {
     if (profile && user) {
-      setFormData(prev => ({
-        ...prev,
+      const initialData = {
         firstName: profile.first_name || '',
         lastName: profile.last_name || '',
         email: user.email || '',
         notificationTime: profile.notification_time || '09:00'
+      }
+      
+      setFormData(prev => ({
+        ...prev,
+        ...initialData
       }))
+      
+      setOriginalData(initialData)
     }
   }, [profile, user])
 
@@ -71,6 +91,24 @@ export default function SettingsPage() {
       router.push('/auth/signin')
     }
   }, [user, profileLoading, router])
+
+  // Helper functions
+  const hasProfileChanges = () => {
+    return (
+      formData.firstName !== originalData.firstName ||
+      formData.lastName !== originalData.lastName ||
+      formData.email !== originalData.email ||
+      formData.notificationTime !== originalData.notificationTime
+    )
+  }
+
+  const isChangingPassword = () => {
+    return formData.newPassword.trim() !== ''
+  }
+
+  const hasAnyChanges = () => {
+    return hasProfileChanges() || isChangingPassword()
+  }
 
   const validateForm = (): boolean => {
     const newErrors: FormErrors = {}
@@ -85,14 +123,12 @@ export default function SettingsPage() {
       newErrors.email = 'Please enter a valid email address'
     }
 
-    // Password validation only if changing password
-    if (formData.newPassword || formData.currentPassword) {
-      if (!formData.currentPassword) {
+    // Password validation only if user wants to change password (has entered new password)
+    if (isChangingPassword()) {
+      if (!formData.currentPassword.trim()) {
         newErrors.currentPassword = 'Current password is required to change password'
       }
-      if (!formData.newPassword) {
-        newErrors.newPassword = 'New password is required'
-      } else if (formData.newPassword.length < 6) {
+      if (formData.newPassword.length < 6) {
         newErrors.newPassword = 'Password must be at least 6 characters'
       }
       if (formData.newPassword !== formData.confirmPassword) {
@@ -140,6 +176,15 @@ export default function SettingsPage() {
       }
 
       setSuccessMessage('Settings updated successfully!')
+      
+      // Update original data with new values (excluding password fields)
+      setOriginalData({
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        email: formData.email,
+        notificationTime: formData.notificationTime
+      })
+      
       // Clear password fields
       setFormData(prev => ({
         ...prev,
@@ -147,6 +192,9 @@ export default function SettingsPage() {
         newPassword: '',
         confirmPassword: ''
       }))
+      
+      // Clear success message after 5 seconds
+      setTimeout(() => setSuccessMessage(''), 5000)
       
     } catch (error: any) {
       console.error('Error updating settings:', error)
@@ -302,7 +350,7 @@ export default function SettingsPage() {
           <div className="bg-card border border-border rounded-lg p-6">
             <h2 className="text-xl font-semibold text-foreground mb-4">Change Password</h2>
             <p className="text-sm text-muted-foreground mb-4">
-              Leave blank to keep your current password.
+              Only fill these fields if you want to change your password. Leave blank to keep your current password.
             </p>
             
             <div className="space-y-4">
@@ -386,8 +434,8 @@ export default function SettingsPage() {
           <div className="flex justify-between items-center">
             <button
               type="submit"
-              disabled={isSubmitting}
-              className="flex items-center gap-2 px-6 py-3 bg-primary hover:bg-primary/90 disabled:bg-primary/50 text-primary-foreground rounded-lg font-medium transition-colors"
+              disabled={isSubmitting || !hasAnyChanges()}
+              className="flex items-center gap-2 px-6 py-3 bg-primary hover:bg-primary/90 disabled:bg-primary/50 disabled:cursor-not-allowed text-primary-foreground rounded-lg font-medium transition-colors"
             >
               {isSubmitting ? (
                 <LoadingSpinner size="sm" className="text-primary-foreground" />
@@ -396,6 +444,11 @@ export default function SettingsPage() {
               )}
               {isSubmitting ? 'Saving...' : 'Save Changes'}
             </button>
+            {!hasAnyChanges() && !isSubmitting && (
+              <p className="text-sm text-muted-foreground ml-4">
+                Make changes to enable saving
+              </p>
+            )}
           </div>
         </form>
 
