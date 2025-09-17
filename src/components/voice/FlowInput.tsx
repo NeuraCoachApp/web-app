@@ -47,7 +47,7 @@ export function FlowInput({
 
   return (
     <div className={`space-y-4 ${className}`}>
-      <div className="relative max-w-md mx-auto">
+      <div className="relative w-full max-w-md mx-auto min-w-[250px]" >
         {type === 'textarea' ? (
           <textarea
             placeholder={placeholder}

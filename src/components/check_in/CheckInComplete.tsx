@@ -4,7 +4,8 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useCheckInContext } from './CheckInProvider'
 import { CheckCircle, Flame, TrendingUp, Calendar, ArrowRight, Brain } from 'lucide-react'
-import { performIntelligentTaskAdjustment } from '@/src/lib/ai-task-adjustment'
+// AI task adjustments now happen in background during voice insights in VoiceCoachChat.tsx
+// import { performIntelligentTaskAdjustment } from '@/src/lib/ai-task-adjustment'
 import { useQueryClient } from '@tanstack/react-query'
 import { goalsKeys } from '@/src/hooks/useGoals'
 import { checkInKeys } from '@/src/hooks/useCheckIn'
@@ -27,13 +28,14 @@ export function CheckInComplete() {
   const [isComplete, setIsComplete] = useState(false)
   const [newStreak, setNewStreak] = useState(0)
   const [hasSubmitted, setHasSubmitted] = useState(false)
-  const [isAdjustingTasks, setIsAdjustingTasks] = useState(false)
-  const [adjustmentResult, setAdjustmentResult] = useState<{
-    adjustmentsMade: boolean
-    encouragementMessage: string
-    strategy: string
-    adjustments?: any[]
-  } | null>(null)
+  // Removed isAdjustingTasks and adjustmentResult since task adjustments now happen in background during voice
+  // const [isAdjustingTasks, setIsAdjustingTasks] = useState(false)
+  // const [adjustmentResult, setAdjustmentResult] = useState<{
+  //   adjustmentsMade: boolean
+  //   encouragementMessage: string
+  //   strategy: string
+  //   adjustments?: any[]
+  // } | null>(null)
 
   const handleSubmitCheckIn = useCallback(async () => {
     // Prevent duplicate submissions
@@ -45,7 +47,8 @@ export function CheckInComplete() {
     setHasSubmitted(true) // Set this immediately to prevent duplicate calls
     
     try {
-      // Step 1: Submit the check-in
+      // Submit the check-in session to database
+      console.log('📝 [CheckInComplete] Creating check-in session...')
       const result = await submitCheckIn()
       
       if (result.streak_updated) {
@@ -55,65 +58,26 @@ export function CheckInComplete() {
       }
       
       setIsComplete(true)
+      console.log('✅ [CheckInComplete] Check-in session created successfully')
       
-      // Step 2: Perform AI-powered task adjustment
-      if (selectedGoal && todaysTasks && checkInData.mood && checkInData.motivation) {
-        setIsAdjustingTasks(true)
-        
-        try {
-          console.log('🧠 [CheckInComplete] Starting AI task adjustment')
-          
-          const adjustmentResult = await performIntelligentTaskAdjustment(
-            selectedGoal.text,
-            todaysTasks,
-            {
-              mood: checkInData.mood,
-              motivation: checkInData.motivation,
-              progressPercentage: getProgressPercentage(),
-              blocker: checkInData.blocker || '',
-              summary: checkInData.summary || ''
-            }
-          )
-          
-          setAdjustmentResult(adjustmentResult)
-          
-          // Only invalidate caches if adjustments were actually made
-          if (user && adjustmentResult.adjustmentsMade) {
-            console.log('🔄 [CheckInComplete] Invalidating goal cache due to task adjustments')
-            await queryClient.invalidateQueries({ queryKey: goalsKeys.user(user.id) })
-            // Don't invalidate other queries unless necessary - they'll refresh naturally when navigating back
-          }
-          
-          console.log('✅ [CheckInComplete] AI task adjustment completed:', adjustmentResult)
-          
-        } catch (error) {
-          console.error('❌ [CheckInComplete] Error in AI task adjustment:', error)
-          // Set fallback result so UI doesn't break
-          setAdjustmentResult({
-            adjustmentsMade: false,
-            encouragementMessage: "I'm here to support you. Tomorrow is a fresh start!",
-            strategy: "Continue with your current plan",
-            adjustments: []
-          })
-        } finally {
-          setIsAdjustingTasks(false)
-        }
-      }
+      // Note: AI task adjustments are now handled in background during voice insights
+      // in VoiceCoachChat.tsx, so no need to do them here
       
     } catch (error) {
       console.error('❌ [CheckInComplete] Error submitting check-in:', error)
       // Reset hasSubmitted on error so user can retry
       setHasSubmitted(false)
     }
-  }, [submitCheckIn, selectedGoal, todaysTasks, checkInData, getProgressPercentage, user, queryClient, userStreak, hasSubmitted])
+  }, [submitCheckIn, userStreak, hasSubmitted])
 
-  useEffect(() => {
-    // Only run once when component mounts
-    if (!hasSubmitted && !isSubmitting) {
-      console.log('🎯 [CheckInComplete] Component mounted, triggering submission')
-      handleSubmitCheckIn()
-    }
-  }, []) // Remove dependencies to ensure this only runs once
+  // Remove auto-submit on mount - user must click "Continue Check-in" button
+  // useEffect(() => {
+  //   // Only run once when component mounts
+  //   if (!hasSubmitted && !isSubmitting) {
+  //     console.log('🎯 [CheckInComplete] Component mounted, triggering submission')
+  //     handleSubmitCheckIn()
+  //   }
+  // }, []) // Remove dependencies to ensure this only runs once
 
   const handleReturnToDashboard = () => {
     router.push('/dashboard')
@@ -121,19 +85,17 @@ export function CheckInComplete() {
 
   const progressPercentage = getProgressPercentage()
 
-  if (isSubmitting || !isComplete || isAdjustingTasks) {
+  // Show loading screen only while actually submitting, not when complete
+  if (!isComplete && (isSubmitting || hasSubmitted)) {
     return (
       <div className="max-w-2xl mx-auto text-center space-y-6">
         <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary mx-auto"></div>
         <div>
           <h2 className="text-2xl font-bold text-foreground mb-2">
-            {isAdjustingTasks ? 'Optimizing Your Plan' : 'Completing Check-In'}
+            Completing Check-In
           </h2>
           <p className="text-muted-foreground">
-            {isAdjustingTasks 
-              ? 'Analyzing your progress and adjusting tomorrow\'s tasks to better support your goals...'
-              : 'Saving your progress and updating your streak...'
-            }
+            Saving your progress and updating your streak...
           </p>
         </div>
       </div>
@@ -243,64 +205,154 @@ export function CheckInComplete() {
         </div>
       )}
 
-      {/* AI Task Adjustment Results */}
-      {adjustmentResult && (
+      {/* AI Task Adjustment Results - Show actual changes made */}
+      {checkInData.taskAdjustments ? (
         <div className={`rounded-xl border p-6 ${
-          adjustmentResult.adjustmentsMade 
+          checkInData.taskAdjustments.adjustmentsMade 
             ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'
             : 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
         }`}>
           <div className="flex items-center gap-3 mb-3">
             <Brain className={`w-6 h-6 ${
-              adjustmentResult.adjustmentsMade ? 'text-blue-600' : 'text-green-600'
+              checkInData.taskAdjustments.adjustmentsMade ? 'text-blue-600' : 'text-green-600'
             }`} />
             <h3 className={`text-lg font-semibold ${
-              adjustmentResult.adjustmentsMade 
+              checkInData.taskAdjustments.adjustmentsMade 
                 ? 'text-blue-800 dark:text-blue-200'
                 : 'text-green-800 dark:text-green-200'
             }`}>
-              {adjustmentResult.adjustmentsMade ? 'Plan Optimized' : 'Plan Looks Great'}
+              {checkInData.taskAdjustments.adjustmentsMade ? 'Tasks Updated' : 'Tasks Look Great'}
+            </h3>
+          </div>
+          
+          <div className="space-y-4">
+            <div className={`text-sm ${
+              checkInData.taskAdjustments.adjustmentsMade 
+                ? 'text-blue-700 dark:text-blue-300'
+                : 'text-green-700 dark:text-green-300'
+            }`}>
+              <p><strong>Strategy:</strong> {checkInData.taskAdjustments.strategy}</p>
+            </div>
+            
+            <div className={`text-sm ${
+              checkInData.taskAdjustments.adjustmentsMade 
+                ? 'text-blue-700 dark:text-blue-300'
+                : 'text-green-700 dark:text-green-300'
+            }`}>
+              <p>{checkInData.taskAdjustments.encouragementMessage}</p>
+            </div>
+
+            {/* Show specific task changes */}
+            {checkInData.taskAdjustments.adjustmentsMade && checkInData.taskAdjustments.adjustments && checkInData.taskAdjustments.adjustments.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-blue-200 dark:border-blue-700">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-sm font-semibold text-blue-800 dark:text-blue-200">
+                    Task Changes Made:
+                  </h4>
+                  <span className="text-xs text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-800 px-2 py-1 rounded-full">
+                    {checkInData.taskAdjustments.adjustments.length} task{checkInData.taskAdjustments.adjustments.length !== 1 ? 's' : ''} updated
+                  </span>
+                </div>
+                <div className="space-y-3">
+                  {checkInData.taskAdjustments.adjustments.map((adjustment: any, index: number) => {
+                    // Get action-specific styling
+                    const getActionStyle = (action: string) => {
+                      switch (action) {
+                        case 'postpone':
+                          return {
+                            badge: 'bg-orange-100 text-orange-800 dark:bg-orange-800 dark:text-orange-100',
+                            icon: '⏰'
+                          }
+                        case 'simplify':
+                          return {
+                            badge: 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100',
+                            icon: '✂️'
+                          }
+                        case 'update':
+                          return {
+                            badge: 'bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-100',
+                            icon: '📝'
+                          }
+                        case 'split':
+                          return {
+                            badge: 'bg-purple-100 text-purple-800 dark:bg-purple-800 dark:text-purple-100',
+                            icon: '🔀'
+                          }
+                        default:
+                          return {
+                            badge: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100',
+                            icon: '📋'
+                          }
+                      }
+                    }
+                    
+                    const actionStyle = getActionStyle(adjustment.action)
+                    
+                    return (
+                      <div key={index} className="bg-white dark:bg-blue-950/30 rounded-lg p-4 border border-blue-200 dark:border-blue-700">
+                        <div className="flex items-start gap-3 mb-3">
+                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${actionStyle.badge} capitalize`}>
+                            {actionStyle.icon} {adjustment.action}
+                          </span>
+                          <span className="text-xs text-blue-600 dark:text-blue-400 flex-1 leading-relaxed">
+                            {adjustment.reason}
+                          </span>
+                        </div>
+                        
+                        {adjustment.new_text && (
+                          <div className="mt-3">
+                            <p className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2">
+                              {adjustment.action === 'update' ? 'Updated Task:' : 
+                               adjustment.action === 'simplify' ? 'Simplified Task:' : 
+                               adjustment.action === 'postpone' ? 'Adjusted Task:' :
+                               adjustment.action === 'split' ? 'Refined Task:' : 'New Task:'}
+                            </p>
+                            <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border-l-4 border-blue-300">
+                              <p className="text-sm text-blue-700 dark:text-blue-300 leading-relaxed">
+                                "{adjustment.new_text}"
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {(adjustment.new_start_at || adjustment.new_end_at) && (
+                          <div className="mt-3 flex flex-wrap gap-3 text-xs">
+                            {adjustment.new_start_at && (
+                              <div className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-200 rounded">
+                                <span>📅 Start: {new Date(adjustment.new_start_at).toLocaleDateString()}</span>
+                              </div>
+                            )}
+                            {adjustment.new_end_at && (
+                              <div className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-200 rounded">
+                                <span>⏳ Due: {new Date(adjustment.new_end_at).toLocaleDateString()}</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        // Fallback if no adjustment data available
+        <div className="rounded-xl border p-6 bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800">
+          <div className="flex items-center gap-3 mb-3">
+            <Brain className="w-6 h-6 text-green-600" />
+            <h3 className="text-lg font-semibold text-green-800 dark:text-green-200">
+              Tasks Optimized
             </h3>
           </div>
           <div className="space-y-3">
-            <p className={`text-sm ${
-              adjustmentResult.adjustmentsMade 
-                ? 'text-blue-700 dark:text-blue-300'
-                : 'text-green-700 dark:text-green-300'
-            }`}>
-              <strong>Strategy:</strong> {adjustmentResult.strategy}
+            <p className="text-sm text-green-700 dark:text-green-300">
+              <strong>Smart Adjustments:</strong> Your tasks have been intelligently adjusted based on your check-in conversation to better support your goals.
             </p>
-            <p className={`text-sm ${
-              adjustmentResult.adjustmentsMade 
-                ? 'text-blue-700 dark:text-blue-300'
-                : 'text-green-700 dark:text-green-300'
-            }`}>
-              {adjustmentResult.encouragementMessage}
+            <p className="text-sm text-green-700 dark:text-green-300">
+              Check your dashboard to see the updated tasks that are tailored to your current mood, motivation, and progress!
             </p>
-
-            {/* Display specific task changes if adjustments were made */}
-            {adjustmentResult.adjustmentsMade && adjustmentResult.adjustments && adjustmentResult.adjustments.length > 0 && (
-              <div className="mt-4 pt-3 border-t border-blue-200 dark:border-blue-700">
-                <h4 className="text-sm font-semibold text-blue-800 dark:text-blue-200 mb-2">
-                  Task Changes Made:
-                </h4>
-                <ul className="space-y-2">
-                  {adjustmentResult.adjustments.map((adjustment: any, index: number) => (
-                    <li key={index} className="text-xs text-blue-700 dark:text-blue-300">
-                      <span className="inline-flex items-center gap-1">
-                        <span className="font-medium capitalize">{adjustment.action}:</span>
-                        <span>{adjustment.reason}</span>
-                      </span>
-                      {adjustment.new_text && (
-                        <div className="ml-4 mt-1 text-blue-600 dark:text-blue-400">
-                          → "{adjustment.new_text}"
-                        </div>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -332,13 +384,24 @@ export function CheckInComplete() {
 
       {/* Action Buttons */}
       <div className="flex flex-col sm:flex-row gap-4 justify-center pt-6">
-        <button
-          onClick={handleReturnToDashboard}
-          className="flex items-center justify-center gap-2 px-8 py-3 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors"
-        >
-          Return to Dashboard
-          <ArrowRight className="w-4 h-4" />
-        </button>
+        {!isComplete ? (
+          <button
+            onClick={handleSubmitCheckIn}
+            disabled={isSubmitting}
+            className="flex items-center justify-center gap-2 px-8 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:bg-green-400 transition-colors"
+          >
+            {isSubmitting ? 'Creating Check-in...' : 'Continue Check-in'}
+            {!isSubmitting && <ArrowRight className="w-4 h-4" />}
+          </button>
+        ) : (
+          <button
+            onClick={handleReturnToDashboard}
+            className="flex items-center justify-center gap-2 px-8 py-3 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors"
+          >
+            Return to Dashboard
+            <ArrowRight className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       {/* Encouragement */}

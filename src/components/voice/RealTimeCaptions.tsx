@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useCoach } from '@/src/contexts/CoachContext'
+import { LoadingDots } from '@/src/components/ui/loading-dots'
 
 interface RealTimeCaptionsProps {
   currentText?: string
@@ -28,71 +29,92 @@ export function RealTimeCaptions({
   previewMode = false
 }: RealTimeCaptionsProps) {
   const { isSpeaking, isPreparingSpeech, currentMessage, audioAnalysisData, currentAudio } = useCoach()
-  const [allParts, setAllParts] = useState<Array<{ text: string; isWord: boolean; isBold?: boolean; isItalic?: boolean }>>([])
-  const [previewParts, setPreviewParts] = useState<Array<{ text: string; isWord: boolean; isBold?: boolean; isItalic?: boolean }>>([])
+  const [allParts, setAllParts] = useState<Array<{ text: string; isWord: boolean; isBold?: boolean; isItalic?: boolean; isLineBreak?: boolean }>>([])
+  const [previewParts, setPreviewParts] = useState<Array<{ text: string; isWord: boolean; isBold?: boolean; isItalic?: boolean; isLineBreak?: boolean }>>([])
   const [visibleWordCount, setVisibleWordCount] = useState(0)
   const [isVisible, setIsVisible] = useState(false)
   const [isPreviewVisible, setIsPreviewVisible] = useState(false)
   const [hasCompletedSpeech, setHasCompletedSpeech] = useState(false)
   const [lastStepKey, setLastStepKey] = useState<string | number | undefined>(stepKey)
   const [currentAudioWordIndex, setCurrentAudioWordIndex] = useState(0)
+  const [hasAnimatedOnce, setHasAnimatedOnce] = useState(false)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const animationFrameRef = useRef<number | null>(null)
 
   // Utility function to parse markdown and create formatted text elements
   // Handles OpenAI's common formatting: **bold**, *italic*, and newlines
-  const parseMarkdown = (text: string): Array<{ text: string; isWord: boolean; isBold?: boolean; isItalic?: boolean }> => {
+  const parseMarkdown = (text: string): Array<{ text: string; isWord: boolean; isBold?: boolean; isItalic?: boolean; isLineBreak?: boolean }> => {
     if (!text) return []
     
-    const parts: Array<{ text: string; isWord: boolean; isBold?: boolean; isItalic?: boolean }> = []
+    const parts: Array<{ text: string; isWord: boolean; isBold?: boolean; isItalic?: boolean; isLineBreak?: boolean }> = []
     
-    // Handle newlines first - convert to spaces for voice synthesis compatibility
-    // Multiple newlines become single spaces to avoid long pauses
-    const normalizedText = text.replace(/\n+/g, ' ').replace(/\s+/g, ' ')
+    // First, split by double newlines to preserve paragraph breaks
+    const paragraphs = text.split(/\n\n+/)
     
-    // Split by markdown formatting while preserving the delimiters
-    // This regex captures: **bold**, *italic*, and regular text
-    const segments = normalizedText.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/)
-    
-    segments.forEach(segment => {
-      if (!segment) return
-      
-      // Check if this segment is formatted with asterisks
-      const boldMatch = segment.match(/^\*\*(.+)\*\*$/)
-      const italicMatch = segment.match(/^\*([^*]+)\*$/)
-      
-      if (boldMatch) {
-        // Bold text - split into words and spaces
-        const content = boldMatch[1]
-        const wordParts = content.split(/(\s+)/).filter(part => part.length > 0)
-        wordParts.forEach(part => {
-          parts.push({
-            text: part,
-            isWord: part.trim().length > 0,
-            isBold: true
-          })
-        })
-      } else if (italicMatch) {
-        // Italic text - split into words and spaces
-        const content = italicMatch[1]
-        const wordParts = content.split(/(\s+)/).filter(part => part.length > 0)
-        wordParts.forEach(part => {
-          parts.push({
-            text: part,
-            isWord: part.trim().length > 0,
-            isItalic: true
-          })
-        })
-      } else {
-        // Regular text - split into words and spaces
-        const wordParts = segment.split(/(\s+)/).filter(part => part.length > 0)
-        wordParts.forEach(part => {
-          parts.push({
-            text: part,
-            isWord: part.trim().length > 0
-          })
-        })
+    paragraphs.forEach((paragraph, paragraphIndex) => {
+      if (paragraphIndex > 0) {
+        // Add paragraph break (double line break for paragraph separation)
+        parts.push({ text: '', isWord: false, isLineBreak: true })
+        parts.push({ text: '', isWord: false, isLineBreak: true })
       }
+      
+      // Handle single newlines within paragraphs - convert to line breaks for display
+      const lines = paragraph.split(/\n/)
+      
+      lines.forEach((line, lineIndex) => {
+        if (lineIndex > 0) {
+          // Add line break
+          parts.push({ text: '', isWord: false, isLineBreak: true })
+        }
+        
+        // Process the line for markdown formatting
+        if (!line.trim()) return // Skip empty lines
+        
+        // Split by markdown formatting while preserving the delimiters
+        // This regex captures: **bold**, *italic*, and regular text
+        const segments = line.trim().split(/(\*\*[^*]+\*\*|\*[^*]+\*)/)
+        
+        segments.forEach((segment: string) => {
+          if (!segment) return
+          
+          // Check if this segment is formatted with asterisks
+          const boldMatch = segment.match(/^\*\*(.+)\*\*$/)
+          const italicMatch = segment.match(/^\*([^*]+)\*$/)
+          
+          if (boldMatch) {
+            // Bold text - split into words and spaces
+            const content = boldMatch[1]
+            const wordParts = content.split(/(\s+)/).filter((part: string) => part.length > 0)
+            wordParts.forEach((part: string) => {
+              parts.push({
+                text: part,
+                isWord: part.trim().length > 0,
+                isBold: true
+              })
+            })
+          } else if (italicMatch) {
+            // Italic text - split into words and spaces
+            const content = italicMatch[1]
+            const wordParts = content.split(/(\s+)/).filter((part: string) => part.length > 0)
+            wordParts.forEach((part: string) => {
+              parts.push({
+                text: part,
+                isWord: part.trim().length > 0,
+                isItalic: true
+              })
+            })
+          } else {
+            // Regular text - split into words and spaces
+            const wordParts = segment.split(/(\s+)/).filter((part: string) => part.length > 0)
+            wordParts.forEach((part: string) => {
+              parts.push({
+                text: part,
+                isWord: part.trim().length > 0
+              })
+            })
+          }
+        })
+      })
     })
     
     return parts
@@ -123,6 +145,7 @@ export function RealTimeCaptions({
       setVisibleWordCount(0)
       setIsVisible(false)
       setLastStepKey(stepKey)
+      setHasAnimatedOnce(false) // Reset animation flag for new step
       
     } else if (lastStepKey === undefined) {
       // Initialize step key
@@ -136,6 +159,9 @@ export function RealTimeCaptions({
       const parts = parseMarkdown(previewText)
       setPreviewParts(parts)
       setIsPreviewVisible(true)
+      if (!hasAnimatedOnce) {
+        setHasAnimatedOnce(true) // Mark that we've animated once
+      }
     } else if (!previewText) {
       // Only clear preview if previewText is null/undefined, not when switching to speaking
       setPreviewParts([])
@@ -196,15 +222,14 @@ export function RealTimeCaptions({
                     const containerRect = container.getBoundingClientRect()
                     const wordRect = lastHighlightedWord.getBoundingClientRect()
                     
-                    // Check if word is below the visible area
-                    if (wordRect.bottom > containerRect.bottom - 20) {
-                      // Scroll to keep the highlighted word in view, but not at the very bottom
-                      const scrollTop = lastHighlightedWord.offsetTop - container.clientHeight / 2
-                      container.scrollTop = Math.max(0, scrollTop)
+                    // Only scroll if word is completely below the visible area (new line needed)
+                    if (wordRect.top > containerRect.bottom - 40) {
+                      // Scroll just enough to bring the next line into view
+                      const lineHeight = parseInt(getComputedStyle(lastHighlightedWord).lineHeight) || 24
+                      const currentScrollTop = container.scrollTop
+                      const newScrollTop = currentScrollTop + lineHeight
+                      container.scrollTop = Math.min(newScrollTop, container.scrollHeight - container.clientHeight)
                     }
-                  } else {
-                    // Fallback: scroll to bottom only if no highlighted words found
-                    container.scrollTop = container.scrollHeight
                   }
                 }
               }
@@ -248,9 +273,10 @@ export function RealTimeCaptions({
         const currentTextContent = parts.map(p => p.text).join('')
         
         if (previewTextContent === currentTextContent) {
-          // Use preview parts as the base for highlighting
+          // Use preview parts as the base for highlighting - NO re-animation
           setAllParts(previewParts)
-          setVisibleWordCount(0)
+          // Don't reset visibleWordCount to 0 - keep current state to avoid re-animation
+          // setVisibleWordCount(0) // REMOVED to prevent re-animation
           setIsVisible(true)
           setIsPreviewVisible(false) // Switch from preview to real-time mode
           
@@ -279,14 +305,16 @@ export function RealTimeCaptions({
   }, [isSpeaking, currentMessage, allParts, showScrollable, isPreviewVisible, previewParts])
 
 
-  // Track when speech completes to keep text bright
+  // Track when speech completes to keep text bright - avoid unnecessary re-renders
   useEffect(() => {
-    if (!isSpeaking && currentMessage && allParts.length > 0) {
+    if (!isSpeaking && currentMessage && allParts.length > 0 && !hasCompletedSpeech) {
+      // Only set to true if it's not already true to prevent unnecessary re-renders
       setHasCompletedSpeech(true)
-    } else if (isSpeaking) {
+    } else if (isSpeaking && hasCompletedSpeech) {
+      // Only set to false if it's not already false
       setHasCompletedSpeech(false)
     }
-  }, [isSpeaking, currentMessage, allParts.length])
+  }, [isSpeaking, currentMessage, allParts.length, hasCompletedSpeech])
 
   // Function to render words with highlighting as audio plays
   const renderWords = () => {
@@ -310,6 +338,18 @@ export function RealTimeCaptions({
         highlightState = 'preview'
       }
       
+      // Handle line breaks
+      if (part.isLineBreak) {
+        return (
+          <motion.br
+            key={`${stepKey}-linebreak-${index}`}
+            initial={{ opacity: hasAnimatedOnce ? 1 : 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.1 }}
+          />
+        )
+      }
+      
       // Build className based on formatting
       let className = part.isWord ? "inline-block" : "inline"
       if (part.isBold) className += " font-bold"
@@ -331,8 +371,8 @@ export function RealTimeCaptions({
       
       return (
         <motion.span
-          key={`${currentMessage || 'preview'}-${index}`}
-          initial={{ opacity: 0 }}
+          key={`${stepKey}-word-${index}-${part.text.slice(0, 10)}`} // Stable key that persists across preview/voice states
+          initial={{ opacity: hasAnimatedOnce ? 1 : 0 }} // Don't re-animate if already animated
           animate={{ 
             opacity: 1,
             // Smooth transition when word is being highlighted
@@ -340,7 +380,7 @@ export function RealTimeCaptions({
           }}
             transition={{ 
               duration: highlightState === 'speaking' ? 0.1 : 0.2,
-              delay: (!isSpeaking && !hasCompletedSpeech) ? index * 0.01 : 0 // Stagger only for initial preview, not after completion
+              delay: (!hasAnimatedOnce && !isSpeaking && !hasCompletedSpeech && !isPreviewVisible) ? index * 0.01 : 0 // Only stagger on first ever render
             }}
           className={className}
         >
@@ -355,9 +395,11 @@ export function RealTimeCaptions({
       <div className={`w-full ${className}`}>
         <div 
           ref={scrollContainerRef}
-          className="h-48 overflow-y-auto bg-card/50 rounded-lg border border-border/50 p-4 scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent"
+          className="h-48 overflow-y-auto bg-card/50 rounded-lg p-4 scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent"
           style={{ 
-            overflowAnchor: 'none' // Prevent scroll anchoring issues
+            overflowAnchor: 'none', // Prevent scroll anchoring issues
+            minHeight: '12rem', // Ensure consistent height (h-48 = 12rem)
+            maxHeight: '12rem'
           }}
         >
           {(isVisible && allParts.length > 0) || (isPreviewVisible && previewParts.length > 0) ? (
@@ -367,8 +409,8 @@ export function RealTimeCaptions({
               <div className="h-2" />
             </div>
           ) : (
-            <div className="text-muted-foreground text-sm italic flex items-center justify-center h-full">
-              Waiting for coach to speak...
+            <div className="flex items-center justify-center h-full">
+              <LoadingDots size="md" color="text-muted-foreground" />
             </div>
           )}
         </div>

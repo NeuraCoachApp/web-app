@@ -6,6 +6,8 @@ import { CoachBlob } from '@/src/components/voice/CoachBlob'
 import { FlowInput } from '@/src/components/voice/FlowInput'
 import { RealTimeCaptions } from '@/src/components/voice/RealTimeCaptions'
 import { useCoach } from '@/src/contexts/CoachContext'
+import { useGoals } from '@/src/hooks/useGoals'
+import { useAuth } from '@/src/contexts/AuthContext'
 import OpenAI from 'openai'
 
 // Initialize OpenAI client
@@ -31,6 +33,8 @@ export function VoiceCoachChat() {
   } = useCheckInContext()
 
   const { speak, setPreviewMessage, markUserInteracted, hasUserInteracted, isSpeaking, isPreparingSpeech, previewMessage } = useCoach()
+  const { user } = useAuth()
+  const { refetch: refetchGoals } = useGoals(user?.id)
   
   const [conversation, setConversation] = useState<ConversationMessage[]>([])
   const [currentInput, setCurrentInput] = useState('')
@@ -91,9 +95,6 @@ export function VoiceCoachChat() {
         openingMessage += `That's excellent progress! You completed ${completedTasks.length} out of ${todaysTasks?.length || 0} tasks. I'd love to hear about how your day went and what helped you stay on track.`
       } else {
         openingMessage += `I notice you had ${incompleteTasks.length} tasks that didn't get completed today. `
-        if (incompleteTasks.length > 0 && incompleteTasks[0]?.text) {
-          openingMessage += `For example, "${incompleteTasks[0].text}" wasn't finished. `
-        }
         openingMessage += `That's completely normal - some days are harder than others. I'm here to listen and help you work through whatever got in your way. What happened today that made it challenging?`
       }
       
@@ -548,8 +549,14 @@ Keep it concise, supportive, and actionable. This will be spoken to the user.`
     setIsProcessing(true)
     setPreviewMessage(null) // Clear any preview when conversation ends
 
-
     try {
+      // Start background task refresh immediately - don't wait for it
+      console.log('🔄 [VoiceCoachChat] Starting background task refresh...')
+      refetchGoals().catch(error => {
+        console.warn('⚠️ [VoiceCoachChat] Background task refresh failed:', error)
+        // Don't throw - this is background operation
+      })
+
       // Generate insights based on the conversation
       const insights = await generateInsights(conversation)
       
@@ -575,6 +582,46 @@ Keep it concise, supportive, and actionable. This will be spoken to the user.`
       })
 
       console.log('🧠 [VoiceCoachChat] Extracted mood and motivation:', { mood, motivation })
+
+      // Start background AI task adjustments while user listens to insights
+      if (selectedGoal && todaysTasks && mood && motivation) {
+        console.log('🧠 [VoiceCoachChat] Starting background AI task adjustment...')
+        import('@/src/lib/ai-task-adjustment').then(async ({ performIntelligentTaskAdjustment }) => {
+          try {
+            const adjustmentResult = await performIntelligentTaskAdjustment(
+              selectedGoal.text,
+              todaysTasks,
+              {
+                mood: mood,
+                motivation: motivation,
+                progressPercentage: getProgressPercentage(),
+                blocker: blockerText,
+                summary: summary
+              }
+            )
+            
+            console.log('✅ [VoiceCoachChat] Background AI task adjustment completed:', adjustmentResult)
+            
+            // Store adjustment results in check-in data for display on completion screen
+            updateCheckInData({
+              taskAdjustments: adjustmentResult
+            })
+            
+            // Refresh goals if adjustments were made
+            if (adjustmentResult.adjustmentsMade) {
+              console.log('🔄 [VoiceCoachChat] Refreshing goals due to task adjustments')
+              refetchGoals().catch(error => {
+                console.warn('⚠️ [VoiceCoachChat] Goal refresh after adjustments failed:', error)
+              })
+            }
+          } catch (error) {
+            console.warn('⚠️ [VoiceCoachChat] Background task adjustment failed:', error)
+            // Don't throw - this is background operation
+          }
+        }).catch(error => {
+          console.warn('⚠️ [VoiceCoachChat] Failed to load task adjustment module:', error)
+        })
+      }
 
       // Speak insights message without the mood/motivation prompt
       await speak(insights)
@@ -661,17 +708,17 @@ Keep it concise, supportive, and actionable. This will be spoken to the user.`
   // No waiting state - jump straight to main interface with preview
 
   return (
-    <div className="max-w-2xl mx-auto space-y-8">
+    <div className="max-w-2xl mx-auto space-y-8 w-full">
       {/* Coach Blob */}
       <div className="flex justify-center mb-6">
         <CoachBlob size={200} />
       </div>
 
       {/* Real-time Captions underneath the blob */}
-      <div className="w-full">
+      <div className="w-full max-w-md mx-auto min-w-[250px]">
         <RealTimeCaptions 
           stepKey={`chat-${conversation.length}`} 
-          className="w-full"
+          className=""
           showScrollable={true}
           previewText={previewMessage || undefined}
           previewMode={!!previewMessage && !isSpeaking}
@@ -734,6 +781,7 @@ Keep it concise, supportive, and actionable. This will be spoken to the user.`
               isCompletingConversation ? "Completing conversation..." :
               "Speak or type your response..."
             }
+            className="min-w-[250px]"
             voicePlaceholder="Share what's on your mind..."
             disabled={isProcessing || isCompletingConversation || isSpeaking || isPreparingSpeech}
             showVoiceButton={!isCompletingConversation && !isSpeaking && !isPreparingSpeech}
@@ -839,34 +887,6 @@ Keep it concise, supportive, and actionable. This will be spoken to the user.`
               </div>
             </div>
             
-            {/* Status Info */}
-            <p>
-              Stage: {userMessageCount <= 1 ? 'Getting Started' : 
-                     userMessageCount <= 4 ? 'Exploring Blockers' : 
-                     userMessageCount <= 6 ? 'Building Solutions' : 'Gaining Insights'} • Messages: {userMessageCount}/50
-            </p>
-            
-            {showCompletionButton && (
-              <p className="text-green-600 dark:text-green-400">
-                You can continue sharing or use the button above to wrap up when ready
-              </p>
-            )}
-            {!showCompletionButton && (
-              <p className="text-blue-600 dark:text-blue-400">
-                Continue sharing - I'm here to help you work through this
-              </p>
-            )}
-            
-            {userMessageCount >= 45 && (
-              <p className="text-red-600 dark:text-red-400 font-medium">
-                Message limit almost reached - please wrap up soon
-              </p>
-            )}
-            {userMessageCount >= 35 && userMessageCount < 45 && (
-              <p className="text-yellow-600 dark:text-yellow-400 font-medium">
-                Approaching message limit - consider preparing to wrap up
-              </p>
-            )}
           </div>
         </div>
       )}
