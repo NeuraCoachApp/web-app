@@ -99,5 +99,39 @@ export function useUpdateProfile() {
     onError: (error) => {
       console.error('Failed to update profile:', error)
     },
+    })
+  }
+
+// Add this function to check and create profile if missing
+export function useEnsureProfile() {
+  const { user } = useAuth()
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: async () => {
+      if (!user) throw new Error('No user')
+      
+      // Check if profile exists
+      const { data: profile, error: getError } = await supabase.rpc('get_profile', {
+        p_user_uuid: user.id
+      })
+      
+      if (getError && getError.message?.includes('Profile not found')) {
+        // Profile doesn't exist, create it
+        const { error: createError } = await supabase.rpc('create_profile', {
+          p_user_uuid: user.id
+        })
+        
+        if (createError) throw createError
+        return true // Profile was created
+      }
+      
+      return false // Profile already existed
+    },
+    onSuccess: () => {
+      // Invalidate profile queries to refetch
+      queryClient.invalidateQueries({ queryKey: ['profile'] })
+    }
   })
 }
+  

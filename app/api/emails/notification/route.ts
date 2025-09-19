@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
 
     // Send notification email
     const { data, error } = await resend.emails.send({
-      from: 'Neura Coach <hyejeebae@gmail.com>',
+      from: 'Neura Coach <hello@neura.coach>',
       to: [email],
       subject: 'Your Neura Coach Session Starts Soon',
       html: `

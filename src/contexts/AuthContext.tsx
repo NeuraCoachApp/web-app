@@ -172,6 +172,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
     })
     
+    // If signup successful and user is created, create profile
+    if (!error && data.user) {
+      try {
+        console.log('creating profile')
+        // Use your existing create_profile function
+        const { error: profileError } = await supabase.rpc('create_profile', { 
+          p_user_uuid: data.user.id 
+        })
+        console.log('profasdasdasdaileError', profileError)
+        
+        if (profileError) {
+          console.error('Profile creation failed:', profileError)
+          // Don't fail the signup, but log the error
+          // The user can still use the app, profile can be created later
+        }
+      } catch (profileError) {
+        console.error('Profile creation failed:', profileError)
+        // Don't fail the signup for profile creation issues
+      }
+    }
+    
     // If user already exists, try to sign them in instead
     if (error) {
       const isUserExists = error.code === 'user_already_exists' || 
