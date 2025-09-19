@@ -55,12 +55,14 @@ export default function DayRectangle({ dayProgress, index, onClick, isSelected }
           ${isFuture ? 'opacity-50' : ''}
         `}
         title={
-          status === 'none' 
-            ? `${date.toLocaleDateString()}: No work done on assigned steps. Click to view details.`
-            : `${date.toLocaleDateString()}: Worked on ${completedSteps}/${totalSteps} assigned steps. Click to view details.`
+          totalSteps === 0
+            ? `${date.toLocaleDateString()}: No tasks assigned for this day. Click to view details.`
+            : status === 'none' 
+            ? `${date.toLocaleDateString()}: No work done on ${totalSteps} assigned task${totalSteps === 1 ? '' : 's'}. Click to view details.`
+            : `${date.toLocaleDateString()}: Completed ${completedSteps}/${totalSteps} assigned task${totalSteps === 1 ? '' : 's'}. Click to view details.`
         }
       >
-        {status !== 'none' ? (
+        {totalSteps > 0 ? (
           <>
             <div className="flex items-center justify-center mb-0.5">
               {getStatusIcon()}
@@ -75,7 +77,7 @@ export default function DayRectangle({ dayProgress, index, onClick, isSelected }
               {getStatusIcon()}
             </div>
             <div className="text-xs font-medium">
-              No work
+              No tasks
             </div>
           </>
         )}

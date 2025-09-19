@@ -28,9 +28,30 @@ function TaskItem({ task, onToggle }: TaskItemProps) {
   }
 
   const isOverdue = task.isOverdue()
+  const dueDate = task.getFormattedEndDate()
+
+  const getOverdueText = () => {
+    if (!isOverdue || task.isCompleted) return null
+
+    const now = new Date()
+    const endDate = task.getEndDate()
+    const diffTime = now.getTime() - endDate.getTime()
+    
+    const days = Math.floor(diffTime / (1000 * 60 * 60 * 24))
+    const hours = Math.floor((diffTime % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
+    const minutes = Math.floor((diffTime % (1000 * 60 * 60)) / (1000 * 60))
+
+    if (days > 0) {
+      return `Overdue by ${days} day${days === 1 ? '' : 's'}`
+    } else if (hours > 0) {
+      return `Overdue by ${hours} hour${hours === 1 ? '' : 's'}`
+    } else {
+      return `Overdue by ${minutes} minute${minutes === 1 ? '' : 's'}`
+    }
+  }
 
   return (
-    <div className="flex items-center gap-4 py-4 px-5 hover:bg-background/60 transition-all duration-200">
+    <div className="flex gap-4 py-4 px-5 items-start hover:bg-background/60 transition-all duration-200">
       <button
         onClick={handleToggle}
         className="flex-shrink-0 text-primary hover:text-primary/80 transition-colors hover:scale-110 transform duration-200"
@@ -43,6 +64,15 @@ function TaskItem({ task, onToggle }: TaskItemProps) {
       </button>
       
       <div className="flex-1 min-w-0">
+        <p className={`text-xs font-medium mb-1 ${
+          task.isCompleted 
+            ? 'text-muted-foreground line-through' 
+            : isOverdue 
+              ? 'text-red-400' 
+              : 'text-muted-foreground'
+        }`}>
+          Due: {dueDate}
+        </p>
         <p className={`text-sm font-medium ${
           task.isCompleted 
             ? 'text-muted-foreground line-through' 
@@ -52,9 +82,9 @@ function TaskItem({ task, onToggle }: TaskItemProps) {
         }`}>
           {task.text}
         </p>
-        {isOverdue && !task.isCompleted && (
+        {getOverdueText() && (
           <p className="text-xs text-red-400 mt-1 font-medium">
-            Overdue by {Math.abs(task.getDaysRemaining())} day{Math.abs(task.getDaysRemaining()) === 1 ? '' : 's'}
+            {getOverdueText()}
           </p>
         )}
       </div>
@@ -343,7 +373,9 @@ export default function DailyTaskList({ goal, onTaskToggle }: DailyTaskListProps
                   </p>
                 </div>
                 <a
-                  href={profile.coach_link}
+                  href={profile.coach_link.startsWith('http://') || profile.coach_link.startsWith('https://') 
+                    ? profile.coach_link 
+                    : `https://${profile.coach_link}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"

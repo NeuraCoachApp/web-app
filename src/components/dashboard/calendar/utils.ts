@@ -11,6 +11,44 @@ export function getDateString(date: Date): string {
   return date.toISOString().split('T')[0] // YYYY-MM-DD format
 }
 
+/**
+ * Get tasks that were relevant for a specific date
+ * Includes both active tasks and overdue tasks that should have been worked on
+ */
+export function getTasksForDate(goal: Goal, date: Date): { active: any[], overdue: any[], total: number } {
+  const allTasks = goal.getTasks()
+  const currentDate = new Date(date)
+  
+  // Get tasks that were active on this specific date
+  const activeTasksForDay = allTasks.filter(task => {
+    if (!task.start_at || !task.end_at) return false
+    
+    const taskStartDate = new Date(task.start_at)
+    const taskEndDate = new Date(task.end_at)
+    
+    // Task is active if the date falls within its timeframe
+    return currentDate >= taskStartDate && currentDate <= taskEndDate
+  })
+  
+  // Get tasks that were overdue on this date (ended before this date and not completed)
+  const overdueTasksForDay = allTasks.filter(task => {
+    if (!task.start_at || !task.end_at) return false
+    
+    const taskEndDate = new Date(task.end_at)
+    
+    // Task is overdue on this date if:
+    // 1. The task ended before this date
+    // 2. The task is not completed
+    return taskEndDate < currentDate && !task.isCompleted
+  })
+  
+  return {
+    active: activeTasksForDay,
+    overdue: overdueTasksForDay,
+    total: activeTasksForDay.length + overdueTasksForDay.length
+  }
+}
+
 export function calculateDayProgress(goal: Goal, date: Date): DayProgress {
   const dateStr = getDateString(date)
   
@@ -23,55 +61,36 @@ export function calculateDayProgress(goal: Goal, date: Date): DayProgress {
     }
   })
   
-  // If no sessions at all, it's a red day (none)
-  if (sessionsFromDay.length === 0) {
-    return {
-      date,
-      dayName: getDayName(date),
-      totalSteps: 0,
-      completedSteps: 0,
-      status: 'none',
-      sessions: sessionsFromDay
-    }
-  }
+  // Get tasks that were relevant for this day (active + overdue)
+  const { active, overdue, total } = getTasksForDate(goal, date)
+  const allRelevantTasks = [...active, ...overdue]
   
-  // Get tasks that were active/assigned for this day
-  const tasksActiveToday = goal.getTasks().filter(task => {
-    // Check for null values before creating dates
-    if (!task.start_at || !task.end_at) return false
-    
-    const taskStartDate = new Date(task.start_at)
-    const taskEndDate = new Date(task.end_at)
-    const currentDate = new Date(date)
-    
-    // Task is active if the date falls within its timeframe
-    return currentDate >= taskStartDate && currentDate <= taskEndDate
-  })
+  // Count completed tasks among those that were relevant for this day
+  const completedTasksCount = allRelevantTasks.filter(task => task.isCompleted).length
   
-  // Count sessions from this day (indicates work was done)
-  const sessionsToday = sessionsFromDay.length
-  
-  const totalTasks = tasksActiveToday.length
-  const hasWork = sessionsToday > 0
-  
+  // Determine status based on work done and task completion
+  const hasWork = sessionsFromDay.length > 0
   let status: 'none' | 'partial' | 'complete' = 'none'
   
-  if (!hasWork) {
-    // No sessions logged = red
-    status = 'none'
-  } else if (totalTasks > 0 && sessionsToday >= totalTasks) {
-    // High session activity relative to active tasks = green
+  if (total === 0) {
+    // No tasks assigned for this day
+    status = hasWork ? 'partial' : 'none'
+  } else if (completedTasksCount === total) {
+    // All tasks completed
     status = 'complete'
-  } else {
-    // Some work done = yellow
+  } else if (completedTasksCount > 0 || hasWork) {
+    // Some tasks completed or some work done
     status = 'partial'
+  } else {
+    // No tasks completed and no work done
+    status = 'none'
   }
   
   return {
     date,
     dayName: getDayName(date),
-    totalSteps: totalTasks,
-    completedSteps: hasWork ? 1 : 0,
+    totalSteps: total,
+    completedSteps: completedTasksCount,
     status,
     sessions: sessionsFromDay
   }
