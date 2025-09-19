@@ -21,7 +21,7 @@ export const metadata: Metadata = {
   title: 'AI Coach',
   description: 'AI-powered coaching application',
   icons: {
-    icon: '/favicon.svg',
+    icon: '/favicon.jpeg',
   },
 }
 
