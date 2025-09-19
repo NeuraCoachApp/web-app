@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
 
     // Send welcome email
     const { data, error } = await resend.emails.send({
-      from: 'Neura Coach <hello@neura.coach>',
+      from: 'Neura Coach <hello@app.neura.coach>',
       to: [email],
       subject: 'Welcome to Neura Coach! 🎉',
       html: `
