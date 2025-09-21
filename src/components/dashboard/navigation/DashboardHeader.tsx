@@ -1,14 +1,13 @@
 'use client'
 
 import React from 'react'
-import { Globe, LogOut, User, ChevronDown, Flame, Settings } from 'lucide-react'
+import { Globe, LogOut, ChevronDown, Flame, Settings } from 'lucide-react'
 import { ThemeToggle } from '@/src/components/ui/theme-toggle'
 import { Goal } from '@/src/classes/Goal'
 import { useUserStreak } from '@/src/hooks/useCheckIn'
 import { useAuth } from '@/src/contexts/AuthContext'
 
 interface DashboardHeaderProps {
-  userEmail?: string
   goals: Goal[]
   selectedGoalIndex: number
   onGoalChange: (index: number) => void
@@ -17,7 +16,6 @@ interface DashboardHeaderProps {
 }
 
 export default function DashboardHeader({ 
-  userEmail, 
   goals, 
   selectedGoalIndex, 
   onGoalChange, 
@@ -74,14 +72,14 @@ export default function DashboardHeader({
             )}
           </div>
           
-          {/* Right side - Streak, User info and actions */}
+          {/* Right side - Streak and actions */}
           <div className="flex items-center gap-4">
             {/* Streak Display */}
             {userStreak && (
               <div className="flex items-center gap-2 px-3 py-1.5 bg-orange-50 dark:bg-orange-900/20 rounded-full border border-orange-200 dark:border-orange-800">
                 <Flame className="w-4 h-4 text-orange-500" />
                 <span className="text-sm font-medium text-orange-700 dark:text-orange-300">
-                  {userStreak.daily_streak || 0} day streak
+                  {userStreak.daily_streak || 0} day
                 </span>
                 {!userStreak.can_check_in_today && (
                   <span className="text-xs text-green-600 dark:text-green-400 font-medium ml-1">
@@ -90,11 +88,6 @@ export default function DashboardHeader({
                 )}
               </div>
             )}
-            
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <User className="w-4 h-4" />
-              <span className="hidden sm:inline">{userEmail}</span>
-            </div>
             <ThemeToggle />
             {onSettingsClick && (
               <button

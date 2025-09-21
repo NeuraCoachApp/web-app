@@ -81,7 +81,6 @@ export default function Dashboard() {
     <main className="min-h-screen bg-background">
       {/* Dashboard Header with Goal Selector */}
       <DashboardHeader
-        userEmail={user.email}
         goals={goals}
         selectedGoalIndex={selectedGoalIndex}
         onGoalChange={setSelectedGoalIndex}

@@ -36,7 +36,11 @@ export class Session {
     if (Array.isArray(rawCompletion) && rawCompletion.length > 0) {
       const firstItem = rawCompletion[0]
       if (typeof firstItem === 'object' && 'task_uuid' in firstItem) {
-        return rawCompletion
+        // Ensure we use the correct field name (iscompleted, not isCompleted)
+        return rawCompletion.map(item => ({
+          task_uuid: item.task_uuid,
+          iscompleted: item.iscompleted !== undefined ? item.iscompleted : item.isCompleted
+        }))
       }
       
       // If it's an array of PostgreSQL composite type strings like ["(uuid,f)","(uuid,t)"]

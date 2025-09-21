@@ -113,7 +113,7 @@ BEGIN
                 SELECT JSON_AGG(
                     JSON_BUILD_OBJECT(
                         'task_uuid', (completion_item).task_uuid,
-                        'isCompleted', (completion_item).iscompleted
+                        'iscompleted', (completion_item).iscompleted
                     )
                 )
                 FROM UNNEST(s.completion) AS completion_item

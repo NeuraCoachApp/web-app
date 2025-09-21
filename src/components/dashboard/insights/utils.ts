@@ -77,7 +77,7 @@ export function calculateAggregatedMetrics(goal: Goal | null, timeframe: Timefra
 
   Object.entries(sessionsByDate).forEach(([date, sessions]) => {
     // Sessions now have direct properties instead of insights
-    const validSessions = sessions.filter(s => s.summary && s.mood && s.motivation)
+    const validSessions = sessions.filter(s => s.mood !== undefined && s.motivation !== undefined)
     
     console.log('🔍 [calculateAggregatedMetrics] Processing date:', date, {
       totalSessions: sessions.length,
@@ -95,44 +95,46 @@ export function calculateAggregatedMetrics(goal: Goal | null, timeframe: Timefra
     const avgMotivation = validSessions.reduce((sum, s) => sum + (s.motivation || 0), 0) / validSessions.length
     const avgSessionCompletion = validSessions.reduce((sum, s) => sum + s.getCompletionPercentage(), 0) / validSessions.length
     
-    // Use the most recent session's summary for that date
+    // Use the most recent session's summary for that date, or a default if empty
     const latestSession = validSessions[validSessions.length - 1]
     
     if (latestSession) {
+      const summaryText = latestSession.summary || `Session on ${new Date(latestSession.created_at).toLocaleDateString()}`
+      
       effort.push({
         date,
         value: Math.round(avgEffort * 10) / 10,
-        summary: latestSession.summary
+        summary: summaryText
       })
       
       stress.push({
         date,
         value: Math.round(avgStress * 10) / 10,
-        summary: latestSession.summary
+        summary: summaryText
       })
       
       progress.push({
         date,
         value: Math.round(avgProgress),
-        summary: latestSession.summary
+        summary: summaryText
       })
       
       mood.push({
         date,
         value: Math.round(avgMood * 10) / 10,
-        summary: latestSession.summary
+        summary: summaryText
       })
       
       motivation.push({
         date,
         value: Math.round(avgMotivation * 10) / 10,
-        summary: latestSession.summary
+        summary: summaryText
       })
       
       sessionCompletion.push({
         date,
         value: Math.round(avgSessionCompletion),
-        summary: latestSession.summary
+        summary: summaryText
       })
     }
   })
