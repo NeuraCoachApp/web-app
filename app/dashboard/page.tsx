@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useOnboardingRedirect } from '@/src/hooks/useOnboarding'
 import { useGoals } from '@/src/hooks/useGoals'
+import { useSubscription } from '@/src/contexts/SubscriptionContext'
 import { DashboardHeader, DashboardTabs, DashboardContent } from '@/src/components/dashboard'
 import { DashboardTab } from '@/src/components/dashboard/navigation/DashboardTabs'
 import { GoalCreationProvider, GoalCreationFlow } from '@/src/components/goal_creation'
@@ -14,6 +15,7 @@ export default function Dashboard() {
   const { user, loading, signOut } = useAuth()
   const router = useRouter()
   const { shouldRedirect: shouldRedirectToOnboarding, isLoading: onboardingLoading } = useOnboardingRedirect()
+  const { canAccessDashboard, isLoading: subscriptionLoading } = useSubscription()
 
   // Fetch goals using the new hook
   const { goals: goalsCache, isLoading: goalsLoading, updateTaskCompletion } = useGoals(user?.id)
@@ -35,6 +37,13 @@ export default function Dashboard() {
       router.push('/auth')
     }
   }, [user, loading, router])
+
+  // Check subscription access
+  useEffect(() => {
+    if (!loading && !subscriptionLoading && user && !canAccessDashboard) {
+      router.push('/pricing')
+    }
+  }, [user, loading, subscriptionLoading, canAccessDashboard, router])
 
   // Check if user needs onboarding
   useEffect(() => {

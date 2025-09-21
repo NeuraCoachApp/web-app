@@ -15,10 +15,10 @@ export default function SignInForm() {
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
 
-  // Redirect to dashboard if already logged in
+  // Redirect to pricing if already logged in
   useEffect(() => {
     if (!authLoading && user) {
-      router.push('/dashboard')
+      router.push('/pricing')
     }
   }, [user, authLoading, router])
 
@@ -33,9 +33,9 @@ export default function SignInForm() {
       if (error) throw error
       
       setMessage('Login successful! Redirecting...')
-      // Redirect to dashboard after successful login
+      // Redirect to pricing after successful login to check subscription
       setTimeout(() => {
-        router.push('/dashboard')
+        router.push('/pricing')
       }, 1000)
     } catch (error: unknown) {
       setMessage(error instanceof Error ? error.message : 'An error occurred')

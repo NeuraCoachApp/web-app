@@ -16,10 +16,10 @@ export default function SignUpForm() {
   const [message, setMessage] = useState('')
   const [isSigningUp, setIsSigningUp] = useState(false)
 
-  // Redirect to dashboard if already logged in (but not during signup process)
+  // Redirect to pricing if already logged in (but not during signup process)
   useEffect(() => {
     if (!authLoading && user && !isSigningUp) {
-      router.push('/dashboard')
+      router.push('/pricing')
     }
   }, [user, authLoading, router, isSigningUp])
 
@@ -37,13 +37,13 @@ export default function SignUpForm() {
       // Check if user was automatically signed in (already existed)
       if ((result as any).wasSignedIn) {
         setMessage('Welcome back! Signing you in...')
-        // Redirect to dashboard since they're an existing user
+        // Redirect to pricing since they need to set up subscription
         setTimeout(() => {
-          router.push('/dashboard')
+          router.push('/pricing')
         }, 1000)
       } else {
-        // Redirect to onboarding immediately for new users
-        router.push('/onboarding')
+        // Redirect to pricing immediately for new users
+        router.push('/pricing')
       }
     } catch (error: unknown) {
       setMessage(error instanceof Error ? error.message : 'An error occurred')

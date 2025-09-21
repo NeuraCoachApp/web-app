@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/src/contexts/AuthContext'
 import { useCoach } from '@/src/contexts/CoachContext'
+import { useSubscription } from '@/src/contexts/SubscriptionContext'
 import { useOnboardingFlow, OnboardingState, OnboardingStep, OnboardingStatus } from '@/src/hooks/useOnboarding'
 import { Profile } from '@/src/hooks/useProfile'
 
@@ -41,6 +42,7 @@ interface OnboardingProviderProps {
 export function OnboardingProvider({ children }: OnboardingProviderProps) {
   const { user, loading } = useAuth()
   const { isSpeaking, isPreparingSpeech } = useCoach()
+  const { canAccessDashboard, isLoading: subscriptionLoading } = useSubscription()
   const router = useRouter()
   const onboardingFlow = useOnboardingFlow()
   const [showIntro, setShowIntro] = useState(true)
@@ -51,6 +53,13 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
       router.push('/auth')
     }
   }, [user, loading, router])
+
+  // Redirect to pricing if user doesn't have subscription access
+  useEffect(() => {
+    if (!loading && !subscriptionLoading && user && !canAccessDashboard) {
+      router.push('/pricing')
+    }
+  }, [user, loading, subscriptionLoading, canAccessDashboard, router])
 
   // Initialize onboarding step
   useEffect(() => {

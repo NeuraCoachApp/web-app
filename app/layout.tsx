@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Inter, DM_Mono } from 'next/font/google'
 import { QueryProvider } from '@/src/contexts/QueryProvider'
 import { AuthProvider } from '@/src/contexts/AuthContext'
+import { SubscriptionProvider } from '@/src/contexts/SubscriptionContext'
 import { CoachProvider } from '@/src/contexts/CoachContext'
 import { ThemeProvider } from '@/src/contexts/ThemeContext'
 import './globals.css'
@@ -36,9 +37,11 @@ export default function RootLayout({
         <QueryProvider>
           <ThemeProvider>
             <AuthProvider>
-              <CoachProvider>
-                {children}
-              </CoachProvider>
+              <SubscriptionProvider>
+                <CoachProvider>
+                  {children}
+                </CoachProvider>
+              </SubscriptionProvider>
             </AuthProvider>
           </ThemeProvider>
         </QueryProvider>
