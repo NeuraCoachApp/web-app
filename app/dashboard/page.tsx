@@ -7,7 +7,7 @@ import { useOnboardingRedirect } from '@/src/hooks/useOnboarding'
 import { useGoals } from '@/src/hooks/useGoals'
 import { DashboardHeader, DashboardTabs, DashboardContent } from '@/src/components/dashboard'
 import { DashboardTab } from '@/src/components/dashboard/navigation/DashboardTabs'
-import MockDataGenerator from '@/src/components/dev/MockDataGenerator'
+import { GoalCreationProvider, GoalCreationFlow } from '@/src/components/goal_creation'
 import LoadingSpinner from '@/src/components/ui/loading-spinner'
 
 export default function Dashboard() {
@@ -26,6 +26,7 @@ export default function Dashboard() {
   // Track currently selected goal and active tab
   const [selectedGoalIndex, setSelectedGoalIndex] = useState(0)
   const [activeTab, setActiveTab] = useState<DashboardTab>('tasks')
+  const [showGoalCreation, setShowGoalCreation] = useState(false)
   const selectedGoal = goals && goals.length > 0 ? goals[selectedGoalIndex] : null
   const hasGoals = goals.length > 0
 
@@ -77,6 +78,26 @@ export default function Dashboard() {
     })
   }
 
+  const handleCreateNewGoal = () => {
+    setShowGoalCreation(true)
+  }
+
+  const handleGoalCreationComplete = () => {
+    setShowGoalCreation(false)
+    // The goals will automatically refresh due to the useGoals hook
+  }
+
+  // If showing goal creation, render the goal creation flow
+  if (showGoalCreation) {
+    return (
+      <main className="min-h-screen bg-background">
+        <GoalCreationProvider onComplete={handleGoalCreationComplete} skipRedirectCheck={true}>
+          <GoalCreationFlow />
+        </GoalCreationProvider>
+      </main>
+    )
+  }
+
   return (
     <main className="min-h-screen bg-background">
       {/* Dashboard Header with Goal Selector */}
@@ -86,6 +107,7 @@ export default function Dashboard() {
         onGoalChange={setSelectedGoalIndex}
         onSignOut={handleSignOut}
         onSettingsClick={() => router.push('/dashboard/settings')}
+        onCreateNewGoal={handleCreateNewGoal}
       />
 
       {/* Dashboard Navigation Tabs */}
@@ -106,19 +128,6 @@ export default function Dashboard() {
         isLoading={goalsLoading}
       />
 
-      {/* Development Tools - Only show in development */}
-      {process.env.NODE_ENV === 'development' && (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="mb-8">
-            <h3 className="text-lg font-inter font-semibold text-foreground mb-4">
-              Development Tools
-            </h3>
-            <div className="space-y-4">
-              <MockDataGenerator />
-            </div>
-          </div>
-        </div>
-      )}
     </main>
   )
 }

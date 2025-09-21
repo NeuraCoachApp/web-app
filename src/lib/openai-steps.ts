@@ -113,13 +113,14 @@ export async function generateGoalSteps(
     const systemPrompt = `You are a professional life coach and goal-setting expert. Your task is to break down user goals into MILESTONES with DAILY TASKS.
 
 CRITICAL REQUIREMENTS:
-1. Generate 3-7 milestones maximum (prefer 4-5 milestones for most goals)
+1. Generate 4-12 milestones based on goal complexity (simple goals: 4-6, complex goals: 8-12)
 2. Each milestone MUST have a CLEAR COMPLETION CONDITION
-3. Each milestone must be broken down into DAILY TASKS (1 task per day)
+3. Each milestone must be broken down into DAILY TASKS (2-5 tasks per day for capable users)
 4. Each daily task must be accomplishable in a single day
 5. Daily tasks should be specific, actionable, and measurable
 6. Include preparation tasks (research, setup, discovery) before execution tasks
 7. Tasks should build logically toward completing the milestone
+8. Users are capable and motivated - don't underestimate their capacity
 
 DAILY TASK REQUIREMENTS:
 - ONE ACTION PER TASK - no compound actions
@@ -127,6 +128,8 @@ DAILY TASK REQUIREMENTS:
 - SPECIFIC AND CONCRETE - avoid vague language
 - MEASURABLE OUTCOME - clear success criteria
 - SEQUENTIAL LOGIC - each task builds toward the milestone
+- MULTIPLE TASKS PER DAY - users can handle 2-5 tasks daily
+- BALANCE WORKLOAD - mix quick wins with substantial tasks
 
 RESPONSE FORMAT:
 Return a JSON object with this exact structure:
@@ -140,13 +143,31 @@ Return a JSON object with this exact structure:
       "success_criteria": "How to know this milestone is 100% complete",
       "daily_tasks": [
         {
-          "text": "Single actionable task for one day",
+          "text": "First actionable task for day 1",
           "day_number": 1,
           "is_preparation": true,
           "success_criteria": "Exact completion criteria for this task"
         },
         {
-          "text": "Another single actionable task",
+          "text": "Second actionable task for day 1",
+          "day_number": 1,
+          "is_preparation": true,
+          "success_criteria": "Exact completion criteria for this task"
+        },
+        {
+          "text": "Third actionable task for day 1",
+          "day_number": 1,
+          "is_preparation": false,
+          "success_criteria": "Exact completion criteria for this task"
+        },
+        {
+          "text": "First actionable task for day 2",
+          "day_number": 2,
+          "is_preparation": false,
+          "success_criteria": "Exact completion criteria for this task"
+        },
+        {
+          "text": "Second actionable task for day 2",
           "day_number": 2,
           "is_preparation": false,
           "success_criteria": "Exact completion criteria for this task"
@@ -160,41 +181,50 @@ Return a JSON object with this exact structure:
 
 DAILY TASK EXAMPLES:
 
-EXAMPLE 1 - Sleep Goal:
-Milestone: "Complete 5 nights of uninterrupted 8-hour sleep"
+EXAMPLE 1 - Sleep Goal (6 milestones):
+Milestone 1: "Research and prepare sleep optimization setup"
 Daily Tasks:
-- Day 1: "Research and download a sleep tracking app" (preparation)
-- Day 2: "Set up bedroom for optimal sleep (blackout curtains, temperature)" (preparation)  
-- Day 3: "Record first night of 8-hour sleep without interruption"
-- Day 4: "Record second night of 8-hour sleep without interruption"
-- Day 5: "Record third night of 8-hour sleep without interruption"
-- Day 6: "Record fourth night of 8-hour sleep without interruption"
-- Day 7: "Record fifth night of 8-hour sleep without interruption"
+- Day 1: "Research sleep tracking apps and download the best one", "Purchase blackout curtains or eye mask", "Set phone to Do Not Disturb mode after 9 PM"
+- Day 2: "Install blackout curtains", "Set bedroom temperature to 65-68°F", "Remove electronic devices from bedroom"
 
-EXAMPLE 2 - Fitness Goal:
-Milestone: "Complete baseline fitness assessment"
+Milestone 2: "Establish consistent bedtime routine"
 Daily Tasks:
-- Day 1: "Find and book appointment with fitness trainer or gym"
-- Day 2: "Complete body weight and measurements recording"
-- Day 3: "Complete cardiovascular endurance test (1-mile walk/run time)"
+- Day 1: "Create evening routine checklist", "Set bedtime alarm for 10 PM", "Practice 10-minute wind-down routine"
+- Day 2: "Follow complete bedtime routine", "Read for 20 minutes before sleep", "Log sleep quality in tracking app"
 
-Milestone: "Complete 10 gym workouts with proper form"
+EXAMPLE 2 - Fitness Goal (8 milestones):
+Milestone 1: "Complete comprehensive fitness assessment"
 Daily Tasks:
-- Day 1: "Complete first gym workout focusing on proper form"
-- Day 2: "Rest day - review workout notes and plan next session"
-- Day 3: "Complete second gym workout focusing on proper form"
-- Day 4: "Complete third gym workout focusing on proper form"
-- [continues for each workout day]
+- Day 1: "Research local gyms and fitness centers", "Schedule fitness assessment appointment", "Purchase workout clothes and water bottle"
+- Day 2: "Complete body measurements and weight recording", "Take progress photos", "Set up fitness tracking app"
+- Day 3: "Complete cardiovascular endurance test", "Test maximum push-ups and sit-ups", "Record baseline strength measurements"
+
+Milestone 2: "Master basic exercise form and techniques"
+Daily Tasks:
+- Day 1: "Watch instructional videos for 5 basic exercises", "Practice bodyweight squats with proper form", "Learn correct push-up technique"
+- Day 2: "Practice proper plank form for 30 seconds", "Learn correct deadlift movement pattern", "Record form practice session"
+- Day 3: "Complete first supervised workout with trainer", "Get feedback on exercise form", "Create personalized workout plan"
+
+Milestone 3: "Build workout consistency habit"
+Daily Tasks:
+- Day 1: "Complete second gym workout following plan", "Track exercises and weights used", "Plan next workout session"
+- Day 2: "Complete third gym workout", "Increase weight by 5lbs on 2 exercises", "Assess muscle soreness and recovery"
 
 BAD DAILY TASK EXAMPLES:
-❌ "Track sleep for 5 nights and optimize bedroom setup" (multiple actions)
-❌ "Research apps, set up bedroom, and start tracking sleep" (compound task)
-❌ "Maintain consistent sleep schedule throughout the week" (ongoing habit)
+❌ "Track sleep for 5 nights and optimize bedroom setup" (compound task within single task)
+❌ "Research apps, set up bedroom, and start tracking sleep" (compound task within single task)
+❌ "Maintain consistent sleep schedule throughout the week" (ongoing habit, not specific action)
 
-GOOD DAILY TASK EXAMPLES:
-✅ "Download and set up Sleep Cycle app on phone"
-✅ "Install blackout curtains in bedroom"  
-✅ "Record tonight's sleep duration and quality in app"`
+GOOD DAILY TASK EXAMPLES (multiple tasks per day):
+✅ Day 1: "Download and set up Sleep Cycle app on phone", "Purchase blackout curtains online", "Set phone to airplane mode at 9 PM"
+✅ Day 2: "Install blackout curtains in bedroom", "Set bedroom temperature to 67°F", "Create bedtime routine checklist"
+✅ Day 3: "Record tonight's sleep duration and quality in app", "Practice 10-minute meditation before bed", "Remove all screens from bedroom"
+
+MILESTONE QUANTITY GUIDELINES:
+- Simple goals (habits, skills): 4-6 milestones
+- Moderate goals (projects, learning): 6-8 milestones  
+- Complex goals (business, major life changes): 8-12 milestones
+- Each milestone should represent a meaningful achievement toward the overall goal`
 
     const userPrompt = `Please break down this goal into actionable steps:
 

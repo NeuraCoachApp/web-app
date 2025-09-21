@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { Globe, LogOut, ChevronDown, Flame, Settings } from 'lucide-react'
+import { Globe, LogOut, ChevronDown, Flame, Settings, Plus } from 'lucide-react'
 import { ThemeToggle } from '@/src/components/ui/theme-toggle'
 import { Goal } from '@/src/classes/Goal'
 import { useUserStreak } from '@/src/hooks/useCheckIn'
@@ -13,6 +13,7 @@ interface DashboardHeaderProps {
   onGoalChange: (index: number) => void
   onSignOut: () => void
   onSettingsClick?: () => void
+  onCreateNewGoal?: () => void
 }
 
 export default function DashboardHeader({ 
@@ -20,7 +21,8 @@ export default function DashboardHeader({
   selectedGoalIndex, 
   onGoalChange, 
   onSignOut,
-  onSettingsClick
+  onSettingsClick,
+  onCreateNewGoal
 }: DashboardHeaderProps) {
   const selectedGoal = goals[selectedGoalIndex]
   const { user } = useAuth()
@@ -43,31 +45,50 @@ export default function DashboardHeader({
 
             {/* Goal Selector Dropdown or No Goals Message */}
             {goals.length > 0 ? (
-              <div className="relative">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <span className="hidden sm:inline">Current Goal:</span>
-                  <div className="relative">
-                    <select
-                      value={selectedGoalIndex}
-                      onChange={(e) => onGoalChange(parseInt(e.target.value))}
-                      className="appearance-none bg-background border border-border rounded-lg px-3 py-2 pr-8 text-foreground font-medium focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent cursor-pointer hover:bg-muted/50 transition-colors"
-                    >
-                      {goals.map((goal, index) => (
-                        <option key={goal.uuid} value={index}>
-                          {goal.text}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-                  </div>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <span className="hidden sm:inline">Current Goal:</span>
+                <div className="relative">
+                  <select
+                    value={selectedGoalIndex}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value === 'create-new' && onCreateNewGoal) {
+                        onCreateNewGoal();
+                      } else {
+                        onGoalChange(parseInt(value));
+                      }
+                    }}
+                    className="appearance-none bg-background border border-border rounded-lg px-3 py-2 pr-8 text-foreground font-medium focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent cursor-pointer hover:bg-muted/50 transition-colors"
+                  >
+                    {goals.map((goal, index) => (
+                      <option key={goal.uuid} value={index}>
+                        {goal.text}
+                      </option>
+                    ))}
+                    {onCreateNewGoal && (
+                      <>
+                        <option disabled>────────────</option>
+                        <option value="create-new">+ Create New Goal</option>
+                      </>
+                    )}
+                  </select>
+                  <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
                 </div>
               </div>
             ) : (
-              <div className="flex items-center gap-2 text-sm">
-                <span className="text-muted-foreground">No goals yet</span>
-                <span className="text-xs bg-muted px-2 py-1 rounded-full text-muted-foreground">
-                  Create your first goal in the Milestones tab
-                </span>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-muted-foreground">No goals yet</span>
+                </div>
+                {onCreateNewGoal && (
+                  <button
+                    onClick={onCreateNewGoal}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors font-medium"
+                  >
+                    <Plus className="w-3 h-3" />
+                    Create Your First Goal
+                  </button>
+                )}
               </div>
             )}
           </div>

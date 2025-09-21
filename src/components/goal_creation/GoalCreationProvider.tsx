@@ -36,9 +36,11 @@ export function useGoalCreationContext() {
 
 interface GoalCreationProviderProps {
   children: React.ReactNode
+  onComplete?: () => void
+  skipRedirectCheck?: boolean
 }
 
-export function GoalCreationProvider({ children }: GoalCreationProviderProps) {
+export function GoalCreationProvider({ children, onComplete, skipRedirectCheck }: GoalCreationProviderProps) {
   const { user, loading } = useAuth()
   const router = useRouter()
   const goalCreationFlow = useGoalCreationFlow()
@@ -56,16 +58,16 @@ export function GoalCreationProvider({ children }: GoalCreationProviderProps) {
     goalCreationFlow.initializeStep()
   }, [goalCreationFlow.initializeStep])
 
-  // Check if user should be redirected away from goal creation
+  // Check if user should be redirected away from goal creation (unless we're in dashboard mode)
   useEffect(() => {
-    if (!user || loading || !goalCreationFlow.state.goalCreationChecked || !goalCreationFlow.goalCreationStatus) return
+    if (skipRedirectCheck || !user || loading || !goalCreationFlow.state.goalCreationChecked || !goalCreationFlow.goalCreationStatus) return
 
     // If no goal creation needed, redirect to dashboard
     if (!goalCreationFlow.goalCreationStatus.shouldRedirectToGoalCreation) {
       router.push('/dashboard')
       return
     }
-  }, [user, loading, goalCreationFlow.state.goalCreationChecked, goalCreationFlow.goalCreationStatus, router])
+  }, [user, loading, goalCreationFlow.state.goalCreationChecked, goalCreationFlow.goalCreationStatus, router, skipRedirectCheck])
 
   const startFlow = () => {
     setShowIntro(false)
@@ -98,17 +100,20 @@ export function GoalCreationProvider({ children }: GoalCreationProviderProps) {
     }
   }, [goalCreationFlow.state.currentStep, router, showIntro])
 
-  // Handle completion and redirect to dashboard
+  // Handle completion and redirect to dashboard or call custom handler
   useEffect(() => {
     if (goalCreationFlow.state.backgroundProcessStatus === 'completed') {
-      console.log('🎯 [Goal Creation] Goal creation completed, redirecting to dashboard')
       // Add a small delay to ensure the user sees the completion
       const timer = setTimeout(() => {
-        router.push('/dashboard')
+        if (onComplete) {
+          onComplete()
+        } else {
+          router.push('/dashboard')
+        }
       }, 2000)
       return () => clearTimeout(timer)
     }
-  }, [goalCreationFlow.state.backgroundProcessStatus, router])
+  }, [goalCreationFlow.state.backgroundProcessStatus, router, onComplete])
 
   if (!user) {
     return null
