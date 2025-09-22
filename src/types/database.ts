@@ -14,6 +14,44 @@ export type Database = {
   }
   public: {
     Tables: {
+      email_logs: {
+        Row: {
+          created_at: string | null
+          email_type: string
+          error_message: string | null
+          id: number
+          message_id: string | null
+          status: number | null
+          user_uuid: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email_type: string
+          error_message?: string | null
+          id?: number
+          message_id?: string | null
+          status?: number | null
+          user_uuid?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email_type?: string
+          error_message?: string | null
+          id?: number
+          message_id?: string | null
+          status?: number | null
+          user_uuid?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_logs_user_uuid_fkey"
+            columns: ["user_uuid"]
+            isOneToOne: false
+            referencedRelation: "profile"
+            referencedColumns: ["uuid"]
+          },
+        ]
+      }
       goal: {
         Row: {
           created_at: string
@@ -74,6 +112,63 @@ export type Database = {
             columns: ["goal_uuid"]
             isOneToOne: false
             referencedRelation: "goal"
+            referencedColumns: ["uuid"]
+          },
+        ]
+      }
+      payment_transactions: {
+        Row: {
+          amount_cents: number
+          created_at: string | null
+          currency: string
+          description: string | null
+          id: string
+          metadata: Json | null
+          status: string
+          stripe_payment_intent_id: string
+          subscription_id: string | null
+          updated_at: string | null
+          user_uuid: string
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string | null
+          currency?: string
+          description?: string | null
+          id?: string
+          metadata?: Json | null
+          status: string
+          stripe_payment_intent_id: string
+          subscription_id?: string | null
+          updated_at?: string | null
+          user_uuid: string
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string | null
+          currency?: string
+          description?: string | null
+          id?: string
+          metadata?: Json | null
+          status?: string
+          stripe_payment_intent_id?: string
+          subscription_id?: string | null
+          updated_at?: string | null
+          user_uuid?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_transactions_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_transactions_user_uuid_fkey"
+            columns: ["user_uuid"]
+            isOneToOne: false
+            referencedRelation: "profile"
             referencedColumns: ["uuid"]
           },
         ]
@@ -174,6 +269,114 @@ export type Database = {
           },
         ]
       }
+      subscription_plans: {
+        Row: {
+          created_at: string | null
+          currency: string
+          description: string | null
+          features: Json | null
+          id: string
+          interval_type: string
+          is_active: boolean
+          name: string
+          price_cents: number
+          stripe_price_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          currency?: string
+          description?: string | null
+          features?: Json | null
+          id: string
+          interval_type: string
+          is_active?: boolean
+          name: string
+          price_cents: number
+          stripe_price_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          currency?: string
+          description?: string | null
+          features?: Json | null
+          id?: string
+          interval_type?: string
+          is_active?: boolean
+          name?: string
+          price_cents?: number
+          stripe_price_id?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      subscriptions: {
+        Row: {
+          cancel_at_period_end: boolean
+          canceled_at: string | null
+          created_at: string | null
+          current_period_end: string
+          current_period_start: string
+          id: string
+          plan_id: string
+          status: string
+          stripe_customer_id: string
+          stripe_subscription_id: string
+          trial_end: string | null
+          trial_start: string | null
+          updated_at: string | null
+          user_uuid: string
+        }
+        Insert: {
+          cancel_at_period_end?: boolean
+          canceled_at?: string | null
+          created_at?: string | null
+          current_period_end: string
+          current_period_start: string
+          id?: string
+          plan_id: string
+          status: string
+          stripe_customer_id: string
+          stripe_subscription_id: string
+          trial_end?: string | null
+          trial_start?: string | null
+          updated_at?: string | null
+          user_uuid: string
+        }
+        Update: {
+          cancel_at_period_end?: boolean
+          canceled_at?: string | null
+          created_at?: string | null
+          current_period_end?: string
+          current_period_start?: string
+          id?: string
+          plan_id?: string
+          status?: string
+          stripe_customer_id?: string
+          stripe_subscription_id?: string
+          trial_end?: string | null
+          trial_start?: string | null
+          updated_at?: string | null
+          user_uuid?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscriptions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "subscription_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscriptions_user_uuid_fkey"
+            columns: ["user_uuid"]
+            isOneToOne: false
+            referencedRelation: "profile"
+            referencedColumns: ["uuid"]
+          },
+        ]
+      }
       task: {
         Row: {
           created_at: string
@@ -250,6 +453,14 @@ export type Database = {
         }
         Returns: Json
       }
+      create_complete_goal: {
+        Args: {
+          p_goal_text: string
+          p_init_end_at: string
+          p_milestones_and_tasks: Json
+        }
+        Returns: Json
+      }
       create_profile: {
         Args: { p_user_uuid: string }
         Returns: {
@@ -310,13 +521,74 @@ export type Database = {
           uuid: string
         }[]
       }
+      get_profile_from_email: {
+        Args: { p_email: string }
+        Returns: {
+          email: string
+          first_name: string
+          last_name: string
+          uuid: string
+        }[]
+      }
+      get_subscription_plans: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          currency: string
+          description: string
+          features: Json
+          id: string
+          interval_type: string
+          name: string
+          price_cents: number
+          stripe_price_id: string
+        }[]
+      }
       get_todays_tasks_for_checkin: {
         Args: { p_goal_uuid: string }
         Returns: Json
       }
+      get_user_email: {
+        Args: { user_id: string }
+        Returns: string
+      }
       get_user_streak: {
         Args: { p_user_uuid: string }
         Returns: Json
+      }
+      get_user_subscription_status: {
+        Args: { p_user_uuid: string }
+        Returns: {
+          cancel_at_period_end: boolean
+          current_period_end: string
+          plan_id: string
+          plan_name: string
+          status: string
+          subscription_status: string
+        }[]
+      }
+      record_payment_transaction: {
+        Args: {
+          p_amount_cents: number
+          p_currency: string
+          p_description?: string
+          p_metadata?: Json
+          p_status: string
+          p_stripe_payment_intent_id: string
+          p_subscription_id: string
+          p_user_uuid: string
+        }
+        Returns: string
+      }
+      send_notification_emails: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      test_http_extension: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          http_available: boolean
+          message: string
+        }[]
       }
       update_daily_streak: {
         Args: { p_user_uuid: string }
@@ -349,6 +621,22 @@ export type Database = {
           p_task_uuid: string
         }
         Returns: boolean
+      }
+      upsert_subscription: {
+        Args: {
+          p_cancel_at_period_end?: boolean
+          p_canceled_at?: string
+          p_current_period_end: string
+          p_current_period_start: string
+          p_plan_id: string
+          p_status: string
+          p_stripe_customer_id: string
+          p_stripe_subscription_id: string
+          p_trial_end?: string
+          p_trial_start?: string
+          p_user_uuid: string
+        }
+        Returns: string
       }
     }
     Enums: {
