@@ -438,13 +438,17 @@ Celebration Plan: ${state.celebration}
       console.error('❌ [Goal Creation] Comprehensive goal creation failed:', error)
       
       // Provide specific error messages for different failure types
-      let errorMessage = 'Failed to create goal'
+      let errorMessage = 'Could not generate goal structure. Please try again.'
       if (error?.status === 429) {
         errorMessage = 'OpenAI rate limit exceeded. Please try again in a few minutes.'
+      } else if (error?.message?.includes('truncated')) {
+        errorMessage = 'Your goal description is too long. Please try with a shorter description.'
+      } else if (error?.message?.includes('invalid JSON')) {
+        errorMessage = 'AI response format error. Please try again.'
       } else if (error?.message?.includes('OpenAI')) {
         errorMessage = 'AI service temporarily unavailable. Please try again.'
-      } else if (error?.message?.includes('Failed to generate')) {
-        errorMessage = 'Could not generate goal structure. Please try again.'
+      } else if (error?.message?.includes('API key')) {
+        errorMessage = 'AI service configuration error. Please contact support.'
       }
       
       setState(prev => ({ 
