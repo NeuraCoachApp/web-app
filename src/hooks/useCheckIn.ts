@@ -36,6 +36,7 @@ export interface CheckInSession {
   uuid: string
   created_at: string
   streak_updated: boolean
+  existing_session?: boolean
 }
 
 export interface CheckInData {
@@ -181,6 +182,14 @@ export function useCreateCheckIn() {
 
       if (error) {
         console.error('Error creating check-in session:', error)
+        
+        // Handle specific duplicate key constraint errors
+        if (error.message && error.message.includes('duplicate key')) {
+          throw new Error('You have already checked in today for this goal.')
+        } else if (error.message && error.message.includes('unique constraint')) {
+          throw new Error('A check-in session already exists. Please try refreshing the page.')
+        }
+        
         throw new Error(`Failed to create check-in: ${error.message}`)
       }
 
