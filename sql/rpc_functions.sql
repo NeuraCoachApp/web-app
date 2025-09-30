@@ -205,9 +205,47 @@ BEGIN
 END;
 $$;
 
+-- Function to get profile from email (needed for Stripe webhooks)
+CREATE OR REPLACE FUNCTION get_profile_from_email(p_email TEXT)
+RETURNS TABLE(
+    uuid UUID,
+    first_name TEXT,
+    last_name TEXT,
+    email TEXT
+)
+LANGUAGE plpgsql
+SECURITY DEFINER -- Use DEFINER to access auth.users table
+SET search_path = auth, public
+AS $$
+DECLARE
+    user_id UUID;
+BEGIN
+    -- Get user ID from auth.users by email (use table alias to avoid ambiguity)
+    SELECT u.id INTO user_id 
+    FROM auth.users u
+    WHERE u.email = p_email;
+    
+    IF user_id IS NULL THEN
+        RETURN;
+    END IF;
+    
+    -- Return profile data
+    RETURN QUERY
+    SELECT 
+        p.uuid,
+        p.first_name,
+        p.last_name,
+        p_email as email
+    FROM profile p
+    WHERE p.uuid = user_id;
+END;
+$$;
+
 -- Grant execute permissions for new functions
 GRANT EXECUTE ON FUNCTION get_goal(UUID) TO authenticated;
 GRANT EXECUTE ON FUNCTION get_batch_milestones(UUID) TO authenticated;
 GRANT EXECUTE ON FUNCTION get_batch_sessions(UUID) TO authenticated;
 GRANT EXECUTE ON FUNCTION get_batch_tasks(UUID) TO authenticated;
 GRANT EXECUTE ON FUNCTION get_batch_goal_object(UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION get_profile_from_email(TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION get_profile_from_email(TEXT) TO anon;

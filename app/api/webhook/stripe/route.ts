@@ -7,8 +7,12 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!)
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!
 
 export async function POST(req: NextRequest) {
+  console.log('🔔 Webhook endpoint hit - POST method')
+  
   const body = await req.text()
   const signature = headers().get('stripe-signature')!
+  
+  console.log('Webhook signature present:', !!signature)
 
   let data: any
   let eventType: string
@@ -25,9 +29,13 @@ export async function POST(req: NextRequest) {
   data = event.data
   eventType = event.type
 
+  console.log(`📨 Processing webhook event: ${eventType}`)
+
   try {
     switch (eventType) {
       case 'checkout.session.completed': {
+        console.log('🛒 Processing checkout.session.completed event')
+        
         // First payment is successful and a subscription is created
         const session = await stripe.checkout.sessions.retrieve(
           data.object.id,
@@ -36,11 +44,27 @@ export async function POST(req: NextRequest) {
           }
         )
 
+        console.log('📋 Session data:', {
+          id: session.id,
+          mode: session.mode,
+          customer: !!session.customer,
+          subscription: !!session.subscription,
+          lineItems: session.line_items?.data?.length || 0,
+          priceId: session.line_items?.data?.[0]?.price?.id
+        })
+
+        // Check if this is a subscription checkout
+        if (session.mode !== 'subscription') {
+          console.log(`ℹ️ Skipping non-subscription checkout (mode: ${session.mode})`)
+          break
+        }
+
         if (!session.customer || !session.subscription || !session.line_items?.data?.[0]?.price?.id) {
-          console.error('Missing required session data:', {
+          console.error('❌ Missing required session data:', {
             customer: !!session.customer,
             subscription: !!session.subscription,
-            priceId: !!session.line_items?.data?.[0]?.price?.id
+            priceId: !!session.line_items?.data?.[0]?.price?.id,
+            mode: session.mode
           })
           break
         }
@@ -99,8 +123,8 @@ export async function POST(req: NextRequest) {
         })
 
         if (error) {
-          console.error('Error creating subscription:', error)
-          console.log('Subscription data attempted:', {
+          console.error('❌ Error creating subscription:', error)
+          console.log('📊 Subscription data attempted:', {
             userId,
             customerId,
             subscriptionId: subscription.id,
@@ -110,12 +134,18 @@ export async function POST(req: NextRequest) {
           break
         }
 
-        console.log(`✅ Subscription created for user ${userId}, plan ${planId}`)
+        console.log(`✅ Subscription created successfully!`)
+        console.log(`👤 User: ${userId}`)
+        console.log(`📦 Plan: ${planId}`)
+        console.log(`🔄 Status: ${subscription.status}`)
         break
       }
 
+      case 'customer.subscription.created':
       case 'customer.subscription.updated': {
-        // Subscription updated (plan change, renewal, etc.)
+        console.log(`🔄 Processing subscription event: ${eventType}`)
+        
+        // Subscription created or updated
         const subscription = data.object as Stripe.Subscription
         const customerId = subscription.customer as string
         const customer = await stripe.customers.retrieve(customerId) as Stripe.Customer
@@ -237,7 +267,8 @@ export async function POST(req: NextRequest) {
       }
 
       default:
-        console.log(`Unhandled event type: ${eventType}`)
+        console.log(`⚠️ Unhandled event type: ${eventType}`)
+        console.log(`📋 Available handlers: checkout.session.completed, customer.subscription.created, customer.subscription.updated, customer.subscription.deleted, customer.created`)
     }
   } catch (e: any) {
     console.error('Stripe error: ' + e.message + ' | EVENT TYPE: ' + eventType)
