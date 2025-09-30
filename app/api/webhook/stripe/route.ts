@@ -192,8 +192,6 @@ export async function POST(req: NextRequest) {
           planId = 'ai_human_coach'
         } else if (priceId === 'prod_T5xGeTSEElsM3B' || priceId === 'price_ai_coach_monthly') {
           planId = 'ai_coach'
-        } else {
-          console.warn('Unknown price ID in subscription update:', priceId, 'defaulting to ai_coach plan')
         }
 
         // Update subscription using our RPC function
