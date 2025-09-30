@@ -295,7 +295,7 @@ export function CoachProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const requestMicPermission = useCallback(async (): Promise<boolean> => {
-    return await requestPermission()
+    return await requestPermission(10000) // 10-second timeout
   }, [requestPermission])
 
   const markUserInteracted = useCallback(() => {

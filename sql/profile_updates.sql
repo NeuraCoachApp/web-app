@@ -23,12 +23,28 @@ SECURITY INVOKER
 AS $$
 DECLARE
   updated_profile RECORD;
+  parsed_notification_time TIMESTAMP WITH TIME ZONE;
 BEGIN
+  -- Parse notification_time safely
+  IF p_notification_time IS NOT NULL THEN
+    BEGIN
+      parsed_notification_time := p_notification_time::TIMESTAMP WITH TIME ZONE;
+    EXCEPTION WHEN others THEN
+      -- If parsing fails, try to parse as time only and use current date
+      BEGIN
+        parsed_notification_time := CURRENT_DATE + p_notification_time::TIME;
+      EXCEPTION WHEN others THEN
+        -- If all parsing fails, use the existing notification_time
+        parsed_notification_time := NULL;
+      END;
+    END;
+  END IF;
+
   UPDATE profile
   SET 
     first_name = COALESCE(p_first_name, profile.first_name),
     last_name = COALESCE(p_last_name, profile.last_name),
-    notification_time = COALESCE(p_notification_time::TIMESTAMP WITH TIME ZONE, profile.notification_time),
+    notification_time = COALESCE(parsed_notification_time, profile.notification_time),
     updated_at = NOW()
   WHERE profile.uuid = p_user_uuid
   RETURNING * INTO updated_profile;
@@ -60,7 +76,16 @@ RETURNS TABLE(
 LANGUAGE plpgsql
 SECURITY INVOKER
 AS $$
+DECLARE
+  profile_exists BOOLEAN;
 BEGIN
+  -- Check if profile exists first
+  SELECT EXISTS(SELECT 1 FROM profile WHERE profile.uuid = p_user_uuid) INTO profile_exists;
+  
+  IF NOT profile_exists THEN
+    RAISE EXCEPTION 'Profile not found for uuid: %', p_user_uuid;
+  END IF;
+  
   RETURN QUERY
   SELECT 
     p.uuid,
@@ -75,10 +100,6 @@ BEGIN
     p.updated_at
   FROM profile p
   WHERE p.uuid = p_user_uuid;
-  
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'Profile not found for uuid: %', p_user_uuid;
-  END IF;
 END;
 $$;
 
@@ -95,15 +116,62 @@ LANGUAGE plpgsql
 SECURITY INVOKER
 AS $$
 DECLARE
-  new_profile RECORD;
+  existing_profile RECORD;
+  profile_exists BOOLEAN;
 BEGIN
-  INSERT INTO profile (uuid, notification_time, created_at, updated_at)
-  VALUES (p_user_uuid, (CURRENT_DATE + TIME '09:00:00'), NOW(), NOW())
-  RETURNING * INTO new_profile;
+  -- Check if profile already exists
+  SELECT EXISTS(SELECT 1 FROM profile WHERE profile.uuid = p_user_uuid) INTO profile_exists;
   
+  IF profile_exists THEN
+    -- Profile already exists, return existing profile data
+    RETURN QUERY
+    SELECT 
+      p.uuid AS uuid,
+      p.first_name AS first_name,
+      p.last_name AS last_name,
+      p.created_at AS created_at,
+      p.updated_at AS updated_at
+    FROM profile p
+    WHERE p.uuid = p_user_uuid;
+    RETURN;
+  END IF;
+
+  -- Create new profile with all required fields and return the result directly
   RETURN QUERY
-  SELECT new_profile.uuid, new_profile.first_name, new_profile.last_name,
-         new_profile.created_at, new_profile.updated_at;
+  WITH inserted_profile AS (
+    INSERT INTO profile (
+      uuid, 
+      first_name, 
+      last_name, 
+      coach_link, 
+      daily_streak, 
+      last_check_in_date, 
+      notification_time, 
+      subscription_status, 
+      created_at, 
+      updated_at
+    )
+    VALUES (
+      p_user_uuid, 
+      NULL, -- first_name
+      NULL, -- last_name
+      '', -- coach_link (empty string as default)
+      0, -- daily_streak
+      NULL, -- last_check_in_date
+      (CURRENT_DATE + TIME '09:00:00'), -- notification_time
+      NULL, -- subscription_status
+      NOW(), -- created_at
+      NOW() -- updated_at
+    )
+    RETURNING profile.uuid, profile.first_name, profile.last_name, profile.created_at, profile.updated_at
+  )
+  SELECT 
+    inserted_profile.uuid,
+    inserted_profile.first_name,
+    inserted_profile.last_name,
+    inserted_profile.created_at,
+    inserted_profile.updated_at
+  FROM inserted_profile;
 END;
 $$;
 

@@ -453,6 +453,14 @@ export type Database = {
         }
         Returns: Json
       }
+      create_complete_goal: {
+        Args: {
+          p_goal_text: string
+          p_init_end_at: string
+          p_milestones_and_tasks: Json
+        }
+        Returns: Json
+      }
       create_profile: {
         Args: { p_user_uuid: string }
         Returns: {

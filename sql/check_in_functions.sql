@@ -76,6 +76,8 @@ DECLARE
     completion_array task_completion[];
     completion_item JSON;
     streak_updated BOOLEAN := FALSE;
+    existing_session_uuid UUID;
+    today_date DATE := CURRENT_DATE;
 BEGIN
     -- Get the authenticated user ID
     user_id := auth.uid();
@@ -87,6 +89,28 @@ BEGIN
         AND g.user_uuid = user_id
     ) THEN
         RAISE EXCEPTION 'Goal not found or access denied';
+    END IF;
+    
+    -- Check if user can check in now (time window + hasn't checked in today)
+    IF NOT can_check_in_now() THEN
+        -- Check if they already have a session today to return existing one
+        SELECT s.uuid INTO existing_session_uuid
+        FROM session s
+        WHERE s.user_uuid = user_id 
+        AND s.goal_uuid = p_goal_uuid 
+        AND DATE(s.created_at) = today_date;
+        
+        -- If session exists, return it; otherwise raise exception
+        IF existing_session_uuid IS NOT NULL THEN
+            RETURN JSON_BUILD_OBJECT(
+                'uuid', existing_session_uuid,
+                'created_at', (SELECT created_at FROM session WHERE uuid = existing_session_uuid),
+                'streak_updated', false,
+                'existing_session', true
+            );
+        ELSE
+            RAISE EXCEPTION 'Check-in not available at this time or you have already checked in today';
+        END IF;
     END IF;
     
     -- Convert JSON task completions to array of composite types
@@ -130,7 +154,8 @@ BEGIN
     RETURN JSON_BUILD_OBJECT(
         'uuid', session_uuid,
         'created_at', NOW(),
-        'streak_updated', streak_updated
+        'streak_updated', streak_updated,
+        'existing_session', false
     );
 END;
 $$;
@@ -209,7 +234,7 @@ BEGIN
 END;
 $$;
 
--- Function to check if user can check in (within allowed time window)
+-- Function to check if user can check in (within allowed time window and hasn't checked in today)
 CREATE OR REPLACE FUNCTION can_check_in_now()
 RETURNS BOOLEAN
 LANGUAGE plpgsql
@@ -217,13 +242,34 @@ SECURITY INVOKER
 AS $$
 DECLARE
     current_hour INTEGER;
+    user_id UUID;
+    has_checked_in_today BOOLEAN := FALSE;
 BEGIN
+    -- Get the authenticated user ID
+    user_id := auth.uid();
+    
+    -- If no user is authenticated, they can't check in
+    IF user_id IS NULL THEN
+        RETURN FALSE;
+    END IF;
+    
     -- Get current hour in user's timezone (assuming UTC for now, can be enhanced)
     current_hour := EXTRACT(HOUR FROM NOW());
     
-    -- Allow check-in between 6 PM (18:00) and 11:59 PM (23:59)
-    -- This can be customized based on requirements
-    RETURN current_hour >= 18 OR current_hour <= 23;
+    -- Check if it's within allowed time window (6 PM to 11:59 PM)
+    IF NOT (current_hour >= 18 OR current_hour <= 23) THEN
+        RETURN FALSE;
+    END IF;
+    
+    -- Check if user has already checked in today for any goal
+    SELECT EXISTS(
+        SELECT 1 FROM session s
+        WHERE s.user_uuid = user_id 
+        AND DATE(s.created_at) = CURRENT_DATE
+    ) INTO has_checked_in_today;
+    
+    -- User can check in if they haven't already checked in today
+    RETURN NOT has_checked_in_today;
 END;
 $$;
 
@@ -291,6 +337,7 @@ BEGIN
     RETURN TRUE;
 END;
 $$;
+
 
 -- Grant execute permissions for new functions
 GRANT EXECUTE ON FUNCTION calculate_daily_progress(UUID, DATE) TO authenticated;

@@ -92,18 +92,32 @@ class SpeechRecognitionService {
     return this.isSupported && this.recognition !== null
   }
 
-  async requestMicrophonePermission(): Promise<boolean> {
+  async requestMicrophonePermission(timeoutMs: number = 10000): Promise<boolean> {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       return false
     }
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      // Create a promise that rejects after timeout
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Microphone permission request timed out')), timeoutMs)
+      })
+
+      // Race between getUserMedia and timeout
+      const stream = await Promise.race([
+        navigator.mediaDevices.getUserMedia({ audio: true }),
+        timeoutPromise
+      ])
+
       // Stop the stream immediately as we just needed permission
       stream.getTracks().forEach(track => track.stop())
       return true
     } catch (error) {
-      console.warn('Microphone permission denied:', error)
+      if (error instanceof Error && error.message.includes('timed out')) {
+        console.warn('Microphone permission request timed out')
+      } else {
+        console.warn('Microphone permission denied:', error)
+      }
       return false
     }
   }
@@ -113,8 +127,8 @@ class SpeechRecognitionService {
       throw new Error('Speech recognition is not supported in this browser')
     }
 
-    // Request microphone permission first
-    const hasPermission = await this.requestMicrophonePermission()
+    // Request microphone permission first with timeout
+    const hasPermission = await this.requestMicrophonePermission(10000)
     if (!hasPermission) {
       throw new Error('Microphone permission is required for speech recognition')
     }
@@ -303,8 +317,8 @@ export function useSpeechRecognition() {
     service.stop()
   }
 
-  const requestPermission = async (): Promise<boolean> => {
-    return await service.requestMicrophonePermission()
+  const requestPermission = async (timeoutMs: number = 10000): Promise<boolean> => {
+    return await service.requestMicrophonePermission(timeoutMs)
   }
 
   const extractName = (speechText: string): NameExtractionResult => {

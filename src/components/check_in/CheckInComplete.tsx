@@ -51,22 +51,36 @@ export function CheckInComplete() {
       console.log('📝 [CheckInComplete] Creating check-in session...')
       const result = await submitCheckIn()
       
-      if (result.streak_updated) {
+      if (result.existing_session) {
+        console.log('ℹ️ [CheckInComplete] Session already exists for today, proceeding to completion')
+        // Don't update streak for existing sessions
+        setNewStreak(userStreak?.daily_streak || 0)
+      } else if (result.streak_updated) {
         setNewStreak((userStreak?.daily_streak || 0) + 1)
       } else {
         setNewStreak(userStreak?.daily_streak || 0)
       }
       
       setIsComplete(true)
-      console.log('✅ [CheckInComplete] Check-in session created successfully')
+      console.log('✅ [CheckInComplete] Check-in session handled successfully')
       
       // Note: AI task adjustments are now handled in background during voice insights
       // in VoiceCoachChat.tsx, so no need to do them here
       
     } catch (error) {
       console.error('❌ [CheckInComplete] Error submitting check-in:', error)
-      // Reset hasSubmitted on error so user can retry
-      setHasSubmitted(false)
+      
+      // Handle specific duplicate key error
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      if (errorMessage.includes('duplicate key') || errorMessage.includes('unique constraint')) {
+        console.log('ℹ️ [CheckInComplete] Duplicate session detected, treating as existing session')
+        // Treat as successful completion - user has already checked in today
+        setNewStreak(userStreak?.daily_streak || 0)
+        setIsComplete(true)
+      } else {
+        // Reset hasSubmitted on other errors so user can retry
+        setHasSubmitted(false)
+      }
     }
   }, [submitCheckIn, userStreak, hasSubmitted])
 
@@ -81,6 +95,16 @@ export function CheckInComplete() {
 
   const handleReturnToDashboard = () => {
     router.push('/dashboard')
+  }
+
+  const handleContinueCheckIn = () => {
+    if (isComplete) {
+      // If already complete, go to dashboard
+      handleReturnToDashboard()
+    } else {
+      // Otherwise, submit the check-in
+      handleSubmitCheckIn()
+    }
   }
 
   const progressPercentage = getProgressPercentage()
@@ -386,7 +410,7 @@ export function CheckInComplete() {
       <div className="flex flex-col sm:flex-row gap-4 justify-center pt-6">
         {!isComplete ? (
           <button
-            onClick={handleSubmitCheckIn}
+            onClick={handleContinueCheckIn}
             disabled={isSubmitting}
             className="flex items-center justify-center gap-2 px-8 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:bg-green-400 transition-colors"
           >

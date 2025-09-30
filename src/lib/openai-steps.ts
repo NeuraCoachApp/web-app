@@ -29,6 +29,32 @@ export interface OpenAIStepsResponse {
 }
 
 /**
+ * Check if a task contains specific, measurable content with numbers or quantities
+ */
+function hasSpecificMeasurableContent(taskText: string): boolean {
+  // Check for specific measurable patterns
+  const measurablePatterns = [
+    /\b\d+\s*(pushups?|squats?|situps?|pullups?|reps?|sets?)\b/i, // Exercise counts
+    /\b\d+\s*(pages?|words?|chapters?|modules?|lessons?)\b/i, // Learning quantities
+    /\b\d+\s*(minutes?|hours?|seconds?)\b/i, // Time durations
+    /\b\d+\s*(steps?|miles?|km|kilometers?)\b/i, // Distance/movement
+    /\b\d+\s*(glasses?|cups?|ounces?|liters?)\b/i, // Quantities
+    /\b\d+\s*(dollars?|\$|applications?|emails?|calls?)\b/i, // Countable items
+    /\bfor\s+\d+\s*(minutes?|hours?|seconds?)\b/i, // Duration activities
+    /\b\d+\s*(times?|x|repetitions?)\b/i, // Repetition counts
+    /\bwalk\s+\d+/i, // Walk with number
+    /\brun\s+\d+/i, // Run with number
+    /\bsave\s+\$?\d+/i, // Save money
+    /\blearn\s+\d+/i, // Learn X things
+    /\bcomplete\s+\d+/i, // Complete X things
+    /\bwrite\s+\d+/i, // Write X words/pages
+    /\bread\s+\d+/i, // Read X pages/chapters
+  ]
+  
+  return measurablePatterns.some(pattern => pattern.test(taskText))
+}
+
+/**
  * Check if a step contains specific, measurable elements and has clear completion criteria
  */
 function isStepSpecific(stepText: string): boolean {
@@ -110,29 +136,32 @@ export async function generateGoalSteps(
   userReason?: string
 ): Promise<OpenAIStepsResponse> {
   try {
-    const systemPrompt = `You are a professional life coach and goal-setting expert. Your task is to break down user goals into MILESTONES with DAILY TASKS.
+    const systemPrompt = `You are a professional life coach. Break down user goals into milestones with multiple specific daily tasks.
 
 CRITICAL REQUIREMENTS:
-1. Generate 4-12 milestones based on goal complexity (simple goals: 4-6, complex goals: 8-12)
-2. Each milestone MUST have a CLEAR COMPLETION CONDITION
-3. Each milestone must be broken down into DAILY TASKS (2-5 tasks per day for capable users)
-4. Each daily task must be accomplishable in a single day
-5. Daily tasks should be specific, actionable, and measurable
-6. Include preparation tasks (research, setup, discovery) before execution tasks
-7. Tasks should build logically toward completing the milestone
-8. Users are capable and motivated - don't underestimate their capacity
+1. Generate 4-8 milestones based on goal complexity
+2. Each milestone has 5-15 days with 3-4 tasks per day
+3. Each task MUST be specific with exact numbers, quantities, or measurable outcomes
+4. Tasks must be completable in one day and build toward the milestone
+5. Include preparation tasks before execution tasks
 
-DAILY TASK REQUIREMENTS:
-- ONE ACTION PER TASK - no compound actions
-- ACCOMPLISHABLE IN ONE DAY - no multi-day tasks
-- SPECIFIC AND CONCRETE - avoid vague language
-- MEASURABLE OUTCOME - clear success criteria
-- SEQUENTIAL LOGIC - each task builds toward the milestone
-- MULTIPLE TASKS PER DAY - users can handle 2-5 tasks daily
-- BALANCE WORKLOAD - mix quick wins with substantial tasks
+TASK SPECIFICITY RULES:
+- Use exact numbers: "Do 50 pushups", "Read 20 pages", "Write 500 words", "Practice guitar for 30 minutes"
+- Include specific quantities: "Complete 3 job applications", "Send 5 networking emails", "Learn 15 Spanish vocabulary words"
+- Set measurable targets: "Save $25 today", "Walk 8,000 steps", "Meditate for 10 minutes", "Cook 1 healthy meal"
+- Time-based tasks: "Study for 45 minutes", "Exercise for 30 minutes", "Practice skill for 20 minutes"
+- Avoid vague terms: NO "improve", "better", "more", "some", "a few", "work on", "focus on"
+- Each task = ONE specific action with a number, time duration, or measurable outcome
+
+GOOD TASK EXAMPLES:
+✅ "Do 30 squats" ✅ "Read 15 pages of book" ✅ "Write 300 words in journal" ✅ "Practice piano for 25 minutes"
+✅ "Walk for 45 minutes" ✅ "Complete 2 online course modules" ✅ "Send 4 job applications" ✅ "Save $20 in savings account"
+
+BAD TASK EXAMPLES:
+❌ "Exercise more" ❌ "Read some pages" ❌ "Work on writing" ❌ "Practice a bit" ❌ "Save some money"
 
 RESPONSE FORMAT:
-Return a JSON object with this exact structure:
+Return ONLY valid JSON with this exact structure:
 {
   "steps": [
     {
@@ -179,52 +208,88 @@ Return a JSON object with this exact structure:
   "goal_summary": "Brief restatement of the goal in coaching language"
 }
 
-DAILY TASK EXAMPLES:
-
-EXAMPLE 1 - Sleep Goal (6 milestones):
-Milestone 1: "Research and prepare sleep optimization setup"
-Daily Tasks:
-- Day 1: "Research sleep tracking apps and download the best one", "Purchase blackout curtains or eye mask", "Set phone to Do Not Disturb mode after 9 PM"
-- Day 2: "Install blackout curtains", "Set bedroom temperature to 65-68°F", "Remove electronic devices from bedroom"
-
-Milestone 2: "Establish consistent bedtime routine"
-Daily Tasks:
-- Day 1: "Create evening routine checklist", "Set bedtime alarm for 10 PM", "Practice 10-minute wind-down routine"
-- Day 2: "Follow complete bedtime routine", "Read for 20 minutes before sleep", "Log sleep quality in tracking app"
-
-EXAMPLE 2 - Fitness Goal (8 milestones):
-Milestone 1: "Complete comprehensive fitness assessment"
-Daily Tasks:
-- Day 1: "Research local gyms and fitness centers", "Schedule fitness assessment appointment", "Purchase workout clothes and water bottle"
-- Day 2: "Complete body measurements and weight recording", "Take progress photos", "Set up fitness tracking app"
-- Day 3: "Complete cardiovascular endurance test", "Test maximum push-ups and sit-ups", "Record baseline strength measurements"
-
-Milestone 2: "Master basic exercise form and techniques"
-Daily Tasks:
-- Day 1: "Watch instructional videos for 5 basic exercises", "Practice bodyweight squats with proper form", "Learn correct push-up technique"
-- Day 2: "Practice proper plank form for 30 seconds", "Learn correct deadlift movement pattern", "Record form practice session"
-- Day 3: "Complete first supervised workout with trainer", "Get feedback on exercise form", "Create personalized workout plan"
-
-Milestone 3: "Build workout consistency habit"
-Daily Tasks:
-- Day 1: "Complete second gym workout following plan", "Track exercises and weights used", "Plan next workout session"
-- Day 2: "Complete third gym workout", "Increase weight by 5lbs on 2 exercises", "Assess muscle soreness and recovery"
-
-BAD DAILY TASK EXAMPLES:
-❌ "Track sleep for 5 nights and optimize bedroom setup" (compound task within single task)
-❌ "Research apps, set up bedroom, and start tracking sleep" (compound task within single task)
-❌ "Maintain consistent sleep schedule throughout the week" (ongoing habit, not specific action)
-
-GOOD DAILY TASK EXAMPLES (multiple tasks per day):
-✅ Day 1: "Download and set up Sleep Cycle app on phone", "Purchase blackout curtains online", "Set phone to airplane mode at 9 PM"
-✅ Day 2: "Install blackout curtains in bedroom", "Set bedroom temperature to 67°F", "Create bedtime routine checklist"
-✅ Day 3: "Record tonight's sleep duration and quality in app", "Practice 10-minute meditation before bed", "Remove all screens from bedroom"
-
-MILESTONE QUANTITY GUIDELINES:
-- Simple goals (habits, skills): 4-6 milestones
-- Moderate goals (projects, learning): 6-8 milestones  
-- Complex goals (business, major life changes): 8-12 milestones
-- Each milestone should represent a meaningful achievement toward the overall goal`
+EXAMPLE:
+{
+  "steps": [
+    {
+      "text": "Build foundation fitness baseline",
+      "order": 1,
+      "estimated_duration_days": 7,
+      "description": "Establish baseline measurements and basic fitness routine",
+      "success_criteria": "Complete 7 consecutive days of 30-minute workouts",
+      "daily_tasks": [
+        {
+          "text": "Do 20 pushups in 3 sets",
+          "day_number": 1,
+          "is_preparation": false,
+          "success_criteria": "Complete 20 total pushups (can break into sets)"
+        },
+        {
+          "text": "Walk 5,000 steps",
+          "day_number": 1,
+          "is_preparation": false,
+          "success_criteria": "Reach exactly 5,000 steps on fitness tracker"
+        },
+        {
+          "text": "Drink 8 glasses of water",
+          "day_number": 1,
+          "is_preparation": false,
+          "success_criteria": "Consume 64 ounces (8 x 8oz glasses) of water"
+        },
+        {
+          "text": "Do 25 pushups in 3 sets",
+          "day_number": 2,
+          "is_preparation": false,
+          "success_criteria": "Complete 25 total pushups (can break into sets)"
+        },
+        {
+          "text": "Walk 6,000 steps",
+          "day_number": 2,
+          "is_preparation": false,
+          "success_criteria": "Reach exactly 6,000 steps on fitness tracker"
+        },
+        {
+          "text": "Hold plank for 60 seconds total",
+          "day_number": 2,
+          "is_preparation": false,
+          "success_criteria": "Hold plank position for cumulative 60 seconds"
+        },
+        {
+          "text": "Drink 8 glasses of water",
+          "day_number": 2,
+          "is_preparation": false,
+          "success_criteria": "Consume 64 ounces (8 x 8oz glasses) of water"
+        },
+        {
+          "text": "Do 30 pushups in 4 sets",
+          "day_number": 3,
+          "is_preparation": false,
+          "success_criteria": "Complete 30 total pushups (can break into sets)"
+        },
+        {
+          "text": "Walk 7,000 steps",
+          "day_number": 3,
+          "is_preparation": false,
+          "success_criteria": "Reach exactly 7,000 steps on fitness tracker"
+        },
+        {
+          "text": "Hold plank for 90 seconds total",
+          "day_number": 3,
+          "is_preparation": false,
+          "success_criteria": "Hold plank position for cumulative 90 seconds"
+        },
+        {
+          "text": "Do 20 squats",
+          "day_number": 3,
+          "is_preparation": false,
+          "success_criteria": "Complete 20 bodyweight squats with proper form"
+        }
+      ]
+    }
+  ],
+  "total_estimated_duration_days": 30,
+  "goal_summary": "Build consistent fitness habit with measurable daily progress"
+}`
 
     const userPrompt = `Please break down this goal into actionable steps:
 
@@ -243,7 +308,7 @@ Generate a structured plan that will help the user achieve this goal successfull
           { role: "user", content: userPrompt }
         ],
         temperature: 0.7,
-        max_tokens: 1500,
+        max_tokens: 4000,
         response_format: { type: "json_object" }
       })
     }, 3, 2000) // 3 retries, starting with 2 second delay
@@ -253,10 +318,36 @@ Generate a structured plan that will help the user achieve this goal successfull
       throw new Error('No response from OpenAI')
     }
 
+    // Check if the response was truncated
+    if (completion.choices[0]?.finish_reason === 'length') {
+      console.warn('⚠️ [OpenAI] Response was truncated due to max_tokens limit')
+      throw new Error('Response was truncated. Please try again with a shorter goal description.')
+    }
+
     console.log('🤖 [OpenAI] Raw response:', responseContent)
 
     // Parse and validate the JSON response
-    const parsedResponse = JSON.parse(responseContent) as OpenAIStepsResponse
+    let parsedResponse: OpenAIStepsResponse
+    try {
+      parsedResponse = JSON.parse(responseContent) as OpenAIStepsResponse
+    } catch (parseError) {
+      console.error('❌ [OpenAI] JSON parsing failed:', parseError)
+      console.error('❌ [OpenAI] Raw response that failed to parse:', responseContent)
+      
+      // Try to extract JSON from the response if it's wrapped in markdown or other text
+      const jsonMatch = responseContent.match(/\{[\s\S]*\}/)
+      if (jsonMatch) {
+        try {
+          console.log('🔄 [OpenAI] Attempting to parse extracted JSON:', jsonMatch[0])
+          parsedResponse = JSON.parse(jsonMatch[0]) as OpenAIStepsResponse
+        } catch (secondParseError) {
+          console.error('❌ [OpenAI] Second JSON parsing attempt failed:', secondParseError)
+          throw new Error('OpenAI returned invalid JSON format. Please try again.')
+        }
+      } else {
+        throw new Error('OpenAI response does not contain valid JSON. Please try again.')
+      }
+    }
     
     // Validate the response structure
     if (!parsedResponse.steps || !Array.isArray(parsedResponse.steps)) {
@@ -299,7 +390,23 @@ Generate a structured plan that will help the user achieve this goal successfull
         if (!task.success_criteria || typeof task.success_criteria !== 'string') {
           throw new Error(`Invalid step ${index + 1}, task ${taskIndex + 1}: missing or invalid success_criteria`)
         }
+        
+        // Check for specific, measurable task text
+        if (!hasSpecificMeasurableContent(task.text)) {
+          console.warn(`⚠️ [OpenAI] Task may lack specificity: "${task.text}"`)
+        }
       })
+      
+      // Validate we have multiple tasks per day (aim for 3-4)
+      const tasksByDay = step.daily_tasks.reduce((acc, task) => {
+        acc[task.day_number] = (acc[task.day_number] || 0) + 1
+        return acc
+      }, {} as Record<number, number>)
+      
+      const daysWithFewTasks = Object.entries(tasksByDay).filter(([_, count]) => count < 2)
+      if (daysWithFewTasks.length > 0) {
+        console.warn(`⚠️ [OpenAI] Step ${index + 1} has days with too few tasks:`, daysWithFewTasks)
+      }
       
       // Validate specificity - check for measurable elements
       if (!isStepSpecific(step.text)) {

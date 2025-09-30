@@ -212,7 +212,7 @@ export function useGoalCreationFlow() {
   const { user } = useAuth()
   const { data: profile } = useProfile(user?.id)
   const { data: goalCreationStatus } = useGoalCreationStatus(user?.id)
-  const { createGoalAsync, createMilestoneAsync, createTaskAsync } = useGoals(user?.id)
+  const { createCompleteGoalAsync } = useGoals(user?.id)
   const { extractName } = useSpeechRecognition()
 
   // State management
@@ -361,46 +361,20 @@ Celebration Plan: ${state.celebration}
 
       setState(prev => ({ ...prev, backgroundProcessStatus: 'creating-goal' }))
 
-      // Step 3: Create the goal first
-      const goalData = { 
-        goalText: goalText,
-        initEndAt: endDate.toISOString()
-      }
-
-      console.log('🎯 [Goal Creation] Creating goal with AI-generated structure')
-      const createdGoal = await createGoalAsync(goalData)
-      console.log('✅ [Goal Creation] Goal created successfully:', createdGoal.uuid)
-
-      // Step 4: Create milestones and tasks from AI-generated steps
-      console.log('🎯 [Goal Creation] Creating milestones and tasks from AI steps')
+      // Step 3: Prepare batch data for complete goal creation
+      console.log('🎯 [Goal Creation] Preparing batch data for complete goal creation')
       
       const startDate = new Date()
       let currentDate = new Date(startDate)
       
-      for (let i = 0; i < generatedSteps.length; i++) {
-        const step = generatedSteps[i]
+      const milestonesAndTasks = generatedSteps.map((step, i) => {
         const milestoneStartDate = new Date(currentDate)
         const milestoneEndDate = new Date(currentDate.getTime() + step.estimated_duration_days * 24 * 60 * 60 * 1000)
         
-        console.log(`🎯 [Goal Creation] Creating milestone ${i + 1}: "${step.text}" with ${step.daily_tasks.length} daily tasks`)
+        console.log(`🎯 [Goal Creation] Preparing milestone ${i + 1}: "${step.text}" with ${step.daily_tasks.length} daily tasks`)
         
-        // Create milestone
-        const milestone = await createMilestoneAsync({
-          goalUuid: createdGoal.uuid,
-          milestoneData: {
-            text: step.text,
-            start_at: milestoneStartDate.toISOString(),
-            end_at: milestoneEndDate.toISOString()
-          }
-        })
-        console.log('✅ [Goal Creation] Milestone created:', milestone.uuid)
-
-        // Create individual daily tasks for this milestone
-        console.log(`📋 [Goal Creation] Creating ${step.daily_tasks.length} daily tasks for milestone: "${step.text}"`)
-        
-        for (let j = 0; j < step.daily_tasks.length; j++) {
-          const dailyTask = step.daily_tasks[j]
-          
+        // Prepare tasks for this milestone
+        const tasks = step.daily_tasks.map((dailyTask) => {
           // Calculate individual task dates (each task is one day)
           const taskDate = new Date(milestoneStartDate.getTime() + (dailyTask.day_number - 1) * 24 * 60 * 60 * 1000)
           const taskStartDate = new Date(taskDate)
@@ -409,27 +383,38 @@ Celebration Plan: ${state.celebration}
           const taskEndDate = new Date(taskDate)
           taskEndDate.setHours(23, 59, 59, 999) // End of day
           
-          console.log(`📅 [Goal Creation] Creating daily task ${j + 1}/${step.daily_tasks.length}: "${dailyTask.text}" for day ${dailyTask.day_number}`)
-          console.log(`🎯 [Goal Creation] Success criteria: "${dailyTask.success_criteria}"`)
-          if (dailyTask.is_preparation) {
-            console.log(`🔧 [Goal Creation] This is a preparation task`)
+          return {
+            text: dailyTask.text,
+            start_at: taskStartDate.toISOString(),
+            end_at: taskEndDate.toISOString(),
+            isCompleted: false
           }
-          
-          const task = await createTaskAsync({
-            goalUuid: createdGoal.uuid,
-            milestoneUuid: milestone.uuid,
-            taskData: {
-              text: dailyTask.text,
-              start_at: taskStartDate.toISOString(),
-              end_at: taskEndDate.toISOString()
-            }
-          })
-          console.log(`✅ [Goal Creation] Daily task created: ${task.uuid}`)
-        }
-
+        })
+        
         // Move to next milestone start date (add 1 day buffer after milestone ends)
         currentDate = new Date(milestoneEndDate.getTime() + 24 * 60 * 60 * 1000)
-      }
+        
+        return {
+          text: step.text,
+          start_at: milestoneStartDate.toISOString(),
+          end_at: milestoneEndDate.toISOString(),
+          tasks
+        }
+      })
+
+      // Step 4: Create the complete goal with all milestones and tasks in one batch operation
+      console.log('🎯 [Goal Creation] Creating complete goal with batch operation:', {
+        milestoneCount: milestonesAndTasks.length,
+        totalTasks: milestonesAndTasks.reduce((sum, m) => sum + m.tasks.length, 0)
+      })
+
+      const result = await createCompleteGoalAsync({
+        goalText: goalText,
+        initEndAt: endDate.toISOString(),
+        milestonesAndTasks
+      })
+
+      console.log('✅ [Goal Creation] Complete goal created successfully:', result.goal_uuid)
       
       console.log('✅ [Goal Creation] Successfully created complete goal structure with AI-generated milestones and tasks')
       setState(prev => ({ ...prev, backgroundProcessStatus: 'completed' }))
@@ -438,13 +423,17 @@ Celebration Plan: ${state.celebration}
       console.error('❌ [Goal Creation] Comprehensive goal creation failed:', error)
       
       // Provide specific error messages for different failure types
-      let errorMessage = 'Failed to create goal'
+      let errorMessage = 'Could not generate goal structure. Please try again.'
       if (error?.status === 429) {
         errorMessage = 'OpenAI rate limit exceeded. Please try again in a few minutes.'
+      } else if (error?.message?.includes('truncated')) {
+        errorMessage = 'Your goal description is too long. Please try with a shorter description.'
+      } else if (error?.message?.includes('invalid JSON')) {
+        errorMessage = 'AI response format error. Please try again.'
       } else if (error?.message?.includes('OpenAI')) {
         errorMessage = 'AI service temporarily unavailable. Please try again.'
-      } else if (error?.message?.includes('Failed to generate')) {
-        errorMessage = 'Could not generate goal structure. Please try again.'
+      } else if (error?.message?.includes('API key')) {
+        errorMessage = 'AI service configuration error. Please contact support.'
       }
       
       setState(prev => ({ 
@@ -453,7 +442,7 @@ Celebration Plan: ${state.celebration}
         stepGenerationError: errorMessage
       }))
     }
-  }, [user, createGoalAsync, createMilestoneAsync, createTaskAsync, generateSteps, state])
+  }, [user, createCompleteGoalAsync, generateSteps, state])
 
   // Handle voice transcript for any input step
   const handleVoiceTranscript = useCallback(async (transcript: string, isFinal: boolean, stepId: string) => {

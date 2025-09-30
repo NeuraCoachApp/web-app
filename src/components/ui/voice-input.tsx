@@ -45,10 +45,10 @@ export default function VoiceInput({
     try {
       setIsProcessing(true)
       
-      // Request microphone permission first
+      // Request microphone permission first with 10-second timeout
       const hasPermission = await requestMicPermission()
       if (!hasPermission) {
-        onError?.('Microphone permission is required for voice input')
+        onError?.('Microphone permission denied or timed out. Please allow microphone access and try again.')
         return
       }
 
@@ -70,8 +70,8 @@ export default function VoiceInput({
     } catch (error) {
       console.error('Voice input error:', error)
       const errorMessage = error instanceof Error ? error.message : String(error)
-      if (errorMessage.includes('permission')) {
-        onError?.('Microphone permission denied. Please allow microphone access and try again.')
+      if (errorMessage.includes('permission') || errorMessage.includes('timed out')) {
+        onError?.('Microphone permission denied or timed out. Please allow microphone access and try again.')
       } else {
         onError?.('Failed to recognize speech. Please try again.')
       }

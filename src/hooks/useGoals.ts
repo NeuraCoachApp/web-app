@@ -196,6 +196,52 @@ async function createMilestone(
 }
 
 /**
+ * Create a complete goal with all milestones and tasks in one batch operation
+ */
+async function createCompleteGoal(
+  userId: string,
+  goalText: string,
+  initEndAt: string,
+  milestonesAndTasks: {
+    text: string
+    start_at: string
+    end_at: string
+    tasks: {
+      text: string
+      start_at: string
+      end_at: string
+      isCompleted?: boolean
+    }[]
+  }[]
+): Promise<{ goal_uuid: string }> {
+  try {
+    console.log('🎯 [createCompleteGoal] Creating complete goal with batch operation:', {
+      goalText,
+      milestoneCount: milestonesAndTasks.length,
+      totalTasks: milestonesAndTasks.reduce((sum, m) => sum + m.tasks.length, 0)
+    })
+
+    const { data, error } = await supabase.rpc('create_complete_goal', {
+      p_goal_text: goalText,
+      p_init_end_at: initEndAt,
+      p_milestones_and_tasks: milestonesAndTasks
+    })
+
+    if (error || !data) {
+      console.error('❌ [createCompleteGoal] Error creating complete goal:', error)
+      throw error || new Error('Failed to create complete goal')
+    }
+
+    console.log('✅ [createCompleteGoal] Successfully created complete goal:', (data as any).goal_uuid)
+    return data as { goal_uuid: string }
+
+  } catch (error) {
+    console.error('❌ [createCompleteGoal] Error in createCompleteGoal:', error)
+    throw error
+  }
+}
+
+/**
  * Create a new task for a goal
  */
 async function createTask(
@@ -320,6 +366,43 @@ export function useGoals(userId?: string, options?: { enabled?: boolean }) {
     },
   })
 
+  // Mutation for creating complete goals with all milestones and tasks in one batch
+  const createCompleteGoalMutation = useMutation({
+    mutationFn: async ({ 
+      goalText, 
+      initEndAt, 
+      milestonesAndTasks 
+    }: { 
+      goalText: string; 
+      initEndAt: string;
+      milestonesAndTasks: {
+        text: string
+        start_at: string
+        end_at: string
+        tasks: {
+          text: string
+          start_at: string
+          end_at: string
+          isCompleted?: boolean
+        }[]
+      }[]
+    }) => {
+      if (!user) throw new Error('No user found')
+      return await createCompleteGoal(user.id, goalText, initEndAt, milestonesAndTasks)
+    },
+    onSuccess: () => {
+      if (user) {
+        // Only invalidate once after the complete goal is created
+        queryClient.invalidateQueries({ queryKey: goalsKeys.user(user.id) })
+        queryClient.invalidateQueries({ queryKey: onboardingKeys.status(user.id) })
+        queryClient.invalidateQueries({ queryKey: goalCreationKeys.status(user.id) })
+      }
+    },
+    onError: (error) => {
+      console.error('Failed to create complete goal:', error)
+    },
+  })
+
   // Mutation for creating milestones
   const createMilestoneMutation = useMutation({
     mutationFn: async ({ 
@@ -410,6 +493,8 @@ export function useGoals(userId?: string, options?: { enabled?: boolean }) {
     // Mutations
     createGoal: createGoalMutation.mutate,
     createGoalAsync: createGoalMutation.mutateAsync,
+    createCompleteGoal: createCompleteGoalMutation.mutate,
+    createCompleteGoalAsync: createCompleteGoalMutation.mutateAsync,
     createMilestone: createMilestoneMutation.mutate,
     createMilestoneAsync: createMilestoneMutation.mutateAsync,
     createTask: createTaskMutation.mutate,
