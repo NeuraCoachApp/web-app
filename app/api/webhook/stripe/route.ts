@@ -108,18 +108,33 @@ export async function POST(req: NextRequest) {
         }
 
         // Create subscription record using our RPC function
+        // For month-to-month subscriptions, set period start to now and end to next month
+        const currentPeriodStart = new Date().toISOString()
+        const currentPeriodEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // 30 days from now
+        const canceledAt = undefined // Only set when subscription is actually canceled
+        const trialStart = undefined
+        const trialEnd = undefined
+
+        console.log('📅 Subscription timestamps:', {
+          currentPeriodStart,
+          currentPeriodEnd,
+          canceledAt,
+          trialStart,
+          trialEnd
+        })
+
         const { error } = await supabase.rpc('upsert_subscription', {
           p_user_uuid: userId,
           p_stripe_customer_id: customerId,
           p_stripe_subscription_id: subscription.id,
           p_plan_id: planId,
           p_status: subscription.status,
-          p_current_period_start: new Date((subscription as any).current_period_start * 1000).toISOString(),
-          p_current_period_end: new Date((subscription as any).current_period_end * 1000).toISOString(),
-          p_cancel_at_period_end: (subscription as any).cancel_at_period_end || false,
-          p_canceled_at: (subscription as any).canceled_at ? new Date((subscription as any).canceled_at * 1000).toISOString() : undefined,
-          p_trial_start: (subscription as any).trial_start ? new Date((subscription as any).trial_start * 1000).toISOString() : undefined,
-          p_trial_end: (subscription as any).trial_end ? new Date((subscription as any).trial_end * 1000).toISOString() : undefined,
+          p_current_period_start: currentPeriodStart,
+          p_current_period_end: currentPeriodEnd,
+          p_cancel_at_period_end: false,
+          p_canceled_at: canceledAt,
+          p_trial_start: trialStart,
+          p_trial_end: trialEnd,
         })
 
         if (error) {
@@ -182,18 +197,25 @@ export async function POST(req: NextRequest) {
         }
 
         // Update subscription using our RPC function
+        // For month-to-month subscriptions, set period start to now and end to next month
+        const currentPeriodStart = new Date().toISOString()
+        const currentPeriodEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // 30 days from now
+        const canceledAt = undefined // Only set when subscription is actually canceled
+        const trialStart = undefined
+        const trialEnd = undefined
+
         const { error } = await supabase.rpc('upsert_subscription', {
           p_user_uuid: userId,
           p_stripe_customer_id: customerId,
           p_stripe_subscription_id: subscription.id,
           p_plan_id: planId,
           p_status: subscription.status,
-          p_current_period_start: new Date((subscription as any).current_period_start * 1000).toISOString(),
-          p_current_period_end: new Date((subscription as any).current_period_end * 1000).toISOString(),
-          p_cancel_at_period_end: (subscription as any).cancel_at_period_end || false,
-          p_canceled_at: (subscription as any).canceled_at ? new Date((subscription as any).canceled_at * 1000).toISOString() : undefined,
-          p_trial_start: (subscription as any).trial_start ? new Date((subscription as any).trial_start * 1000).toISOString() : undefined,
-          p_trial_end: (subscription as any).trial_end ? new Date((subscription as any).trial_end * 1000).toISOString() : undefined,
+          p_current_period_start: currentPeriodStart,
+          p_current_period_end: currentPeriodEnd,
+          p_cancel_at_period_end: false,
+          p_canceled_at: canceledAt,
+          p_trial_start: trialStart,
+          p_trial_end: trialEnd,
         })
 
         if (error) {
