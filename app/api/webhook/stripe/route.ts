@@ -37,7 +37,11 @@ export async function POST(req: NextRequest) {
         )
 
         if (!session.customer || !session.subscription || !session.line_items?.data?.[0]?.price?.id) {
-          console.error('Missing required session data')
+          console.error('Missing required session data:', {
+            customer: !!session.customer,
+            subscription: !!session.subscription,
+            priceId: !!session.line_items?.data?.[0]?.price?.id
+          })
           break
         }
 
@@ -47,9 +51,11 @@ export async function POST(req: NextRequest) {
         const subscription = session.subscription as Stripe.Subscription
 
         if (!customer.email) {
-          console.error('Missing customer email')
+          console.error('Missing customer email for customer:', customerId)
           break
         }
+
+        console.log('Processing checkout for customer email:', customer.email)
 
         // Get user profile using our new RPC function
         const { data: profileData, error: profileError } = await supabase.rpc('get_profile_from_email', {
@@ -57,7 +63,8 @@ export async function POST(req: NextRequest) {
         })
 
         if (profileError || !profileData || profileData.length === 0) {
-          console.error('No user found with email:', customer.email, profileError)
+          console.error('No user found with email:', customer.email, 'Error:', profileError)
+          console.log('Profile lookup result:', { profileData, profileError })
           break
         }
 
@@ -65,10 +72,15 @@ export async function POST(req: NextRequest) {
 
         // Determine plan ID from price ID
         let planId = 'ai_coach' // default
-        if (priceId === 'prod_T5xHTC6jEc5Er1') {
+        console.log('Processing price ID:', priceId)
+        
+        // Map price IDs to plan IDs - check both production and test price IDs
+        if (priceId === 'prod_T5xHTC6jEc5Er1' || priceId === 'price_ai_human_coach_monthly') {
           planId = 'ai_human_coach' // $280/mo AI + Human Coach
-        } else if (priceId === 'prod_T5xGeTSEElsM3B') {
+        } else if (priceId === 'prod_T5xGeTSEElsM3B' || priceId === 'price_ai_coach_monthly') {
           planId = 'ai_coach' // $20/mo AI Coach
+        } else {
+          console.warn('Unknown price ID:', priceId, 'defaulting to ai_coach plan')
         }
 
         // Create subscription record using our RPC function
@@ -88,6 +100,13 @@ export async function POST(req: NextRequest) {
 
         if (error) {
           console.error('Error creating subscription:', error)
+          console.log('Subscription data attempted:', {
+            userId,
+            customerId,
+            subscriptionId: subscription.id,
+            planId,
+            status: subscription.status
+          })
           break
         }
 
@@ -121,10 +140,15 @@ export async function POST(req: NextRequest) {
 
         // Determine plan ID from price ID
         let planId = 'ai_coach' // default
-        if (priceId === 'prod_T5xHTC6jEc5Er1') {
+        console.log('Processing price ID for subscription update:', priceId)
+        
+        // Map price IDs to plan IDs - check both production and test price IDs
+        if (priceId === 'prod_T5xHTC6jEc5Er1' || priceId === 'price_ai_human_coach_monthly') {
           planId = 'ai_human_coach'
-        } else if (priceId === 'prod_T5xGeTSEElsM3B') {
+        } else if (priceId === 'prod_T5xGeTSEElsM3B' || priceId === 'price_ai_coach_monthly') {
           planId = 'ai_coach'
+        } else {
+          console.warn('Unknown price ID in subscription update:', priceId, 'defaulting to ai_coach plan')
         }
 
         // Update subscription using our RPC function
@@ -205,6 +229,13 @@ export async function POST(req: NextRequest) {
         break
       }
 
+      case 'customer.created': {
+        // Customer created - just acknowledge it
+        const customer = data.object as Stripe.Customer
+        console.log(`👤 Customer created: ${customer.email}`)
+        break
+      }
+
       default:
         console.log(`Unhandled event type: ${eventType}`)
     }
@@ -212,5 +243,13 @@ export async function POST(req: NextRequest) {
     console.error('Stripe error: ' + e.message + ' | EVENT TYPE: ' + eventType)
   }
 
-  return NextResponse.json({})
+  return NextResponse.json({ received: true })
+}
+
+// Add GET method for testing endpoint accessibility
+export async function GET() {
+  return NextResponse.json({ 
+    message: 'Stripe webhook endpoint is accessible',
+    timestamp: new Date().toISOString()
+  })
 }
