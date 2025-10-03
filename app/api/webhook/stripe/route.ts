@@ -153,6 +153,66 @@ export async function POST(req: NextRequest) {
         console.log(`👤 User: ${userId}`)
         console.log(`📦 Plan: ${planId}`)
         console.log(`🔄 Status: ${subscription.status}`)
+
+        // Send payment confirmation email
+        try {
+          const planName = planId === 'ai_human_coach' ? 'AI Coach + Human Coach' : 'AI Coach';
+          const planPrice = planId === 'ai_human_coach' ? '$280/month' : '$20/month';
+          
+          const emailResponse = await fetch('https://app.neura.coach/api/emails/payment-confirmation', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              email: customer.email,
+              firstName: profileData[0].first_name,
+              lastName: profileData[0].last_name,
+              planName,
+              planPrice,
+              nextBillingDate: currentPeriodEnd,
+            }),
+          });
+
+          if (emailResponse.ok) {
+            const emailResult = await emailResponse.json()
+            console.log('✅ Payment confirmation email sent successfully')
+            
+            // Log the email attempt in database
+            const { error: logError } = await supabase
+              .from('email_logs')
+              .insert({
+                user_uuid: userId,
+                email_type: 'payment_confirmation',
+                status: 200,
+                message_id: emailResult.messageId,
+                created_at: new Date().toISOString()
+              })
+            
+            if (logError) {
+              console.error('Failed to log payment confirmation email:', logError)
+            }
+          } else {
+            console.error('❌ Failed to send payment confirmation email:', await emailResponse.text())
+            
+            // Log the failed email attempt
+            const { error: logError } = await supabase
+              .from('email_logs')
+              .insert({
+                user_uuid: userId,
+                email_type: 'payment_confirmation',
+                status: emailResponse.status,
+                error_message: `HTTP ${emailResponse.status}: ${await emailResponse.text()}`,
+                created_at: new Date().toISOString()
+              })
+            
+            if (logError) {
+              console.error('Failed to log payment confirmation email error:', logError)
+            }
+          }
+        } catch (emailError) {
+          console.error('❌ Error sending payment confirmation email:', emailError)
+        }
         break
       }
 

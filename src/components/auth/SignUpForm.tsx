@@ -42,6 +42,27 @@ export default function SignUpForm() {
           router.push('/pricing')
         }, 1000)
       } else {
+        // Send signup email for new users
+        try {
+          const emailResponse = await fetch('/api/emails/signup', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              email: email,
+            }),
+          });
+
+          if (emailResponse.ok) {
+            console.log('✅ Signup email sent successfully')
+          } else {
+            console.error('❌ Failed to send signup email:', await emailResponse.text())
+          }
+        } catch (emailError) {
+          console.error('❌ Error sending signup email:', emailError)
+        }
+        
         // Redirect to pricing immediately for new users
         router.push('/pricing')
       }
