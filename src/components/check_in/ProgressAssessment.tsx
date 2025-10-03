@@ -59,13 +59,8 @@ export function ProgressAssessment() {
     // Ensure user interaction is registered for voice synthesis
     markUserInteracted()
     
-    if (progressPercentage < 80) {
-      // Need blocker discussion
-      setCurrentStep('chat')
-    } else {
-      // Skip chat, go directly to mood/motivation
-      setCurrentStep('mood')
-    }
+    // Always go to chat step to gauge mood/motivation through AI coach blob
+    setCurrentStep('chat')
   }
 
   const currentProgress = calculateCurrentProgress()
@@ -165,16 +160,14 @@ export function ProgressAssessment() {
           disabled={!canProceedToNext()}
           className="px-8 py-3 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {currentProgress < 80 ? 'Continue - Let\'s Talk' : 'Continue to Check-In'}
+          Continue - Let's Talk
         </button>
       </div>
 
       {/* Progress hint */}
-      {currentProgress < 80 && (
-        <div className="text-center text-sm text-muted-foreground">
-          <p>Since your progress is under 80%, I'll help you work through any blockers.</p>
-        </div>
-      )}
+      <div className="text-center text-sm text-muted-foreground">
+        <p>I'll help you reflect on your day and understand how you're feeling.</p>
+      </div>
     </div>
   )
 }

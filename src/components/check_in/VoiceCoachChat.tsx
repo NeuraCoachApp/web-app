@@ -92,7 +92,7 @@ export function VoiceCoachChat() {
       let openingMessage = `I see you completed ${progressPercentage}% of your tasks today. `
       
       if (progressPercentage >= 80) {
-        openingMessage += `That's excellent progress! You completed ${completedTasks.length} out of ${todaysTasks?.length || 0} tasks. I'd love to hear about how your day went and what helped you stay on track.`
+        openingMessage += `That's excellent progress! You completed ${completedTasks.length} out of ${todaysTasks?.length || 0} tasks. I'd love to hear about how your day went and understand how you're feeling. What was your experience like today?`
       } else {
         openingMessage += `I notice you had ${incompleteTasks.length} tasks that didn't get completed today. `
         openingMessage += `That's completely normal - some days are harder than others. I'm here to listen and help you work through whatever got in your way. What happened today that made it challenging?`
@@ -260,17 +260,27 @@ Respond with ONLY "COMPLETE" or "CONTINUE" - no other text.`
         messageLimitGuidance = `NOTE: You are at ${currentUserMessageCount}/50 messages. Start moving toward solutions and prepare for conversation completion.`
       }
 
-      const systemPrompt = `You are an empathetic AI life coach conducting a structured check-in dialogue. Follow this coaching approach:
+      const systemPrompt = `You are an empathetic AI life coach conducting a structured check-in dialogue. Your primary goal is to understand the user's mood and motivation while providing appropriate support based on their progress.
 
-COACHING FLOW (based on conversation stage):
-1. INITIAL RESPONSE (first user message): Acknowledge their feelings and ask about specific blockers
+COACHING FLOW (based on progress and conversation stage):
+${progressPercentage >= 80 ? `
+HIGH PROGRESS FLOW (≥80% completion):
+1. INITIAL RESPONSE: Celebrate their success and ask about their experience/feelings
+2. MOOD EXPLORATION (messages 2-4): Understand what contributed to their success and how they're feeling
+3. MOTIVATION ASSESSMENT (messages 5-6): Gauge their motivation levels and energy
+4. INSIGHT DELIVERY (messages 7+): Provide positive reinforcement and prepare for completion
+` : `
+LOW PROGRESS FLOW (<80% completion):
+1. INITIAL RESPONSE: Acknowledge their feelings and ask about specific blockers
 2. BLOCKER EXPLORATION (messages 2-4): Dig deeper into what prevented task completion
 3. SOLUTION BUILDING (messages 5-6): Guide them toward actionable solutions
 4. INSIGHT DELIVERY (messages 7+): Provide supportive insights and prepare for session completion
+`}
 
 CONVERSATION CONTEXT:
 - Goal: ${selectedGoal?.text}
 - Progress today: ${progressPercentage}% (${completedTasks.length}/${todaysTasks?.length || 0} tasks completed)
+- Progress level: ${progressPercentage >= 80 ? 'HIGH (celebrating success)' : 'LOW (working through challenges)'}
 - Current conversation stage: ${currentUserMessageCount <= 1 ? 'INITIAL' : currentUserMessageCount <= 4 ? 'EXPLORATION' : currentUserMessageCount <= 6 ? 'SOLUTION BUILDING' : 'INSIGHT DELIVERY'}
 - User message count: ${currentUserMessageCount}/50
 
@@ -281,9 +291,18 @@ ${taskContext}
 
 COACHING GUIDELINES:
 - Be empathetic and non-judgmental
+- ALWAYS focus on understanding their mood and motivation levels
+${progressPercentage >= 80 ? `
+- Celebrate their achievements and ask about their emotional state
+- Explore what strategies worked well for them
+- Understand their energy and motivation levels
+- Ask about their feelings of accomplishment or satisfaction
+` : `
 - Ask specific follow-up questions about incomplete tasks
 - Help identify patterns and root causes
 - Guide toward practical solutions
+- Understand how setbacks affected their mood
+`}
 - Keep responses 2-3 sentences max
 - Reference specific tasks when relevant
 - Build toward actionable insights
@@ -294,11 +313,18 @@ RESPONSE STYLE:
 - Ask one focused question per response (EXCEPT when providing final insights)
 - Validate their feelings first
 - Connect responses to their specific tasks and goal
+${progressPercentage >= 80 ? '- Maintain celebratory and positive energy' : '- Show understanding and support for challenges'}
 
-IMPORTANT: When the user has gained clarity, actionable insights, or shows they understand what went wrong and how to fix it, provide a CONCLUDING statement WITHOUT questions. Use phrases like:
+IMPORTANT: When you have a good understanding of their mood and motivation (and ${progressPercentage >= 80 ? 'celebrated their success' : 'worked through their blockers'}), provide a CONCLUDING statement WITHOUT questions. Use phrases like:
+${progressPercentage >= 80 ? `
+- "It sounds like you're feeling really positive about today's progress..."
+- "I can sense your satisfaction with what you accomplished..."
+- "Your motivation seems strong after today's success..."
+` : `
 - "It sounds like you have a clear path forward..."
 - "I'm glad we could work through this together..."
 - "You've identified some great strategies..."
+`}
 - "I believe you're well-equipped to tackle tomorrow..."
 
 These concluding statements should NOT contain questions and should signal the natural end of the conversation.`
@@ -506,20 +532,40 @@ Use integers only, no decimals.`
   const generateInsights = async (conversationHistory: ConversationMessage[]): Promise<string> => {
     try {
       const progressPercentage = getProgressPercentage()
+      const completedTasks = todaysTasks?.filter((task: any) => task.isCompleted) || []
       const incompleteTasks = todaysTasks?.filter((task: any) => !task.isCompleted) || []
       
-      const systemPrompt = `Based on this coaching conversation, provide 2-3 supportive insights and actionable suggestions for tomorrow. Focus on:
+      let systemPrompt: string
+      
+      if (progressPercentage >= 80) {
+        // High progress users - focus on celebration and maintaining momentum
+        systemPrompt = `Based on this coaching conversation with a high-performing user, provide 2-3 celebratory insights and encouragement for maintaining momentum. Focus on:
 
-1. Key blockers or challenges identified
-2. Practical solutions or adjustments
-3. Encouragement and motivation
+1. Celebrating their success and what worked well today
+2. Reinforcing positive patterns and strategies they used
+3. Encouraging them to maintain this momentum tomorrow
 
 Context:
 - Goal: ${selectedGoal?.text}
-- Progress: ${progressPercentage}% completed
+- Excellent Progress: ${progressPercentage}% completed (${completedTasks.length}/${todaysTasks?.length || 0} tasks)
+- Completed tasks: ${completedTasks.map((t: any) => t.text).join(', ')}
+
+Keep it celebratory, positive, and motivating. This will be spoken to the user. No need to mention blockers or adjustments.`
+      } else {
+        // Low progress users - focus on blockers and solutions
+        systemPrompt = `Based on this coaching conversation, provide 2-3 supportive insights and actionable suggestions for tomorrow. Focus on:
+
+1. Key blockers or challenges identified
+2. Practical solutions or adjustments
+3. Encouragement and motivation for tomorrow
+
+Context:
+- Goal: ${selectedGoal?.text}
+- Progress: ${progressPercentage}% completed (${completedTasks.length}/${todaysTasks?.length || 0} tasks)
 - Incomplete tasks: ${incompleteTasks.map((t: any) => t.text).join(', ')}
 
-Keep it concise, supportive, and actionable. This will be spoken to the user.`
+Keep it supportive, solution-focused, and actionable. This will be spoken to the user.`
+      }
 
       const conversationText = conversationHistory
         .map(msg => `${msg.role}: ${msg.content}`)
@@ -535,10 +581,17 @@ Keep it concise, supportive, and actionable. This will be spoken to the user.`
         max_tokens: 200
       })
 
-      return response.choices[0]?.message?.content || "Thank you for sharing with me. Tomorrow is a fresh start, and I believe in your ability to make progress on your goal."
+      const defaultMessage = progressPercentage >= 80 
+        ? "Congratulations on your excellent progress today! You're doing amazing work on your goal. Keep up this fantastic momentum tomorrow!"
+        : "Thank you for sharing with me. Tomorrow is a fresh start, and I believe in your ability to make progress on your goal."
+
+      return response.choices[0]?.message?.content || defaultMessage
     } catch (error) {
       console.error('Error generating insights:', error)
-      return "Thank you for sharing with me. Tomorrow is a fresh start, and I believe in your ability to make progress on your goal."
+      const defaultMessage = getProgressPercentage() >= 80 
+        ? "Congratulations on your excellent progress today! You're doing amazing work on your goal. Keep up this fantastic momentum tomorrow!"
+        : "Thank you for sharing with me. Tomorrow is a fresh start, and I believe in your ability to make progress on your goal."
+      return defaultMessage
     }
   }
 
@@ -567,15 +620,16 @@ Keep it concise, supportive, and actionable. This will be spoken to the user.`
       // Extract mood and motivation from conversation
       const { mood, motivation } = await extractMoodAndMotivation(conversation)
       
-      // Update check-in data with blocker information and extracted mood/motivation
-      const blockerText = conversation
+      // Update check-in data with extracted mood/motivation and appropriate context
+      const progressPercentage = getProgressPercentage()
+      const contextText = conversation
         .filter(msg => msg.role === 'user')
         .map(msg => msg.content)
         .join(' ')
-        .substring(0, 500) // Limit blocker text length
+        .substring(0, 500) // Limit text length
 
       updateCheckInData({ 
-        blocker: blockerText,
+        blocker: progressPercentage < 80 ? contextText : '', // Only store as blocker for low progress users
         summary: summary,
         mood: mood,
         motivation: motivation
@@ -584,8 +638,9 @@ Keep it concise, supportive, and actionable. This will be spoken to the user.`
       console.log('🧠 [VoiceCoachChat] Extracted mood and motivation:', { mood, motivation })
 
       // Start background AI task adjustments while user listens to insights
-      if (selectedGoal && todaysTasks && mood && motivation) {
-        console.log('🧠 [VoiceCoachChat] Starting background AI task adjustment...')
+      // Only perform task adjustments for users with <80% progress (low progress users)
+      if (selectedGoal && todaysTasks && mood && motivation && progressPercentage < 80) {
+        console.log('🧠 [VoiceCoachChat] Starting background AI task adjustment for low progress user...')
         import('@/src/lib/ai-task-adjustment').then(async ({ performIntelligentTaskAdjustment }) => {
           try {
             const adjustmentResult = await performIntelligentTaskAdjustment(
@@ -594,8 +649,8 @@ Keep it concise, supportive, and actionable. This will be spoken to the user.`
               {
                 mood: mood,
                 motivation: motivation,
-                progressPercentage: getProgressPercentage(),
-                blocker: blockerText,
+                progressPercentage: progressPercentage,
+                blocker: contextText, // This will be the blocker text for low progress users
                 summary: summary
               }
             )
@@ -621,6 +676,8 @@ Keep it concise, supportive, and actionable. This will be spoken to the user.`
         }).catch(error => {
           console.warn('⚠️ [VoiceCoachChat] Failed to load task adjustment module:', error)
         })
+      } else if (progressPercentage >= 80) {
+        console.log('🎉 [VoiceCoachChat] High progress user - skipping task adjustments')
       }
 
       // Speak insights message without the mood/motivation prompt

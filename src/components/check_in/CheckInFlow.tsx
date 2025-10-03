@@ -4,10 +4,9 @@ import React from 'react'
 import { useCheckInContext } from './CheckInProvider'
 import { ProgressAssessment } from './ProgressAssessment'
 import { VoiceCoachChat } from './VoiceCoachChat'
-import { MoodMotivationInput } from './MoodMotivationInput'
 import { CheckInComplete } from './CheckInComplete'
 import { FlowLayout } from '@/src/components/voice/FlowLayout'
-import { Flame, Target, MessageCircle, Heart } from 'lucide-react'
+import { Flame, Target, MessageCircle } from 'lucide-react'
 
 export function CheckInFlow() {
   const {
@@ -46,31 +45,23 @@ export function CheckInFlow() {
           subtitle: `How did today go with your goal: "${selectedGoal?.text}"?`,
           icon: <Target className="w-6 h-6" />,
           step: 1,
-          totalSteps: needsBlockerDiscussion() ? 4 : 3
+          totalSteps: 3
         }
       case 'chat':
         return {
           title: 'Let\'s Talk',
-          subtitle: 'I notice you didn\'t complete all your tasks today. Let\'s work through what happened.',
+          subtitle: 'Let me understand how you\'re feeling and help you reflect on your day.',
           icon: <MessageCircle className="w-6 h-6" />,
           step: 2,
-          totalSteps: 4
-        }
-      case 'mood':
-        return {
-          title: 'How Are You Feeling?',
-          subtitle: 'Help me understand your current mood and motivation levels.',
-          icon: <Heart className="w-6 h-6" />,
-          step: needsBlockerDiscussion() ? 3 : 2,
-          totalSteps: needsBlockerDiscussion() ? 4 : 3
+          totalSteps: 3
         }
       case 'complete':
         return {
           title: 'Check-In Complete!',
           subtitle: 'Great job checking in today. Keep up the momentum!',
           icon: <Flame className="w-6 h-6" />,
-          step: needsBlockerDiscussion() ? 4 : 3,
-          totalSteps: needsBlockerDiscussion() ? 4 : 3
+          step: 3,
+          totalSteps: 3
         }
       default:
         return {
@@ -91,8 +82,6 @@ export function CheckInFlow() {
         return <ProgressAssessment />
       case 'chat':
         return <VoiceCoachChat />
-      case 'mood':
-        return <MoodMotivationInput />
       case 'complete':
         return <CheckInComplete />
       default:

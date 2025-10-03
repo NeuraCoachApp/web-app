@@ -9,8 +9,8 @@ import { Goal } from '@/src/classes/Goal'
 
 interface CheckInContextType {
   // Flow state
-  currentStep: 'assessment' | 'chat' | 'mood' | 'complete'
-  setCurrentStep: (step: 'assessment' | 'chat' | 'mood' | 'complete') => void
+  currentStep: 'assessment' | 'chat' | 'complete'
+  setCurrentStep: (step: 'assessment' | 'chat' | 'complete') => void
   
   // Data
   selectedGoal: Goal | null
@@ -136,11 +136,8 @@ export function CheckInProvider({ children }: CheckInProviderProps) {
         // Can proceed if we have task completion data
         return (checkInFlow.checkInData.task_completions?.length || 0) > 0
       case 'chat':
-        // Can proceed if blocker discussion is complete (has summary)
-        return !!checkInFlow.checkInData.summary
-      case 'mood':
-        // Can proceed if mood and motivation are set
-        return !!(checkInFlow.checkInData.mood && checkInFlow.checkInData.motivation)
+        // Can proceed if conversation is complete (has summary and mood/motivation extracted)
+        return !!(checkInFlow.checkInData.summary && checkInFlow.checkInData.mood && checkInFlow.checkInData.motivation)
       case 'complete':
         return false // Final step
       default:
@@ -201,8 +198,8 @@ export function CheckInProvider({ children }: CheckInProviderProps) {
   }
   
   const contextValue: CheckInContextType = {
-    currentStep: checkInFlow.currentStep,
-    setCurrentStep: checkInFlow.setCurrentStep,
+    currentStep: checkInFlow.currentStep as 'assessment' | 'chat' | 'complete',
+    setCurrentStep: checkInFlow.setCurrentStep as (step: 'assessment' | 'chat' | 'complete') => void,
     selectedGoal,
     setSelectedGoal,
     dailyProgress,

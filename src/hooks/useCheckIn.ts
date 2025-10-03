@@ -265,9 +265,17 @@ export function useUpdateTaskCompletion() {
 /**
  * Main hook for check-in flow management
  */
-export function useCheckInFlow() {
+export function useCheckInFlow(): {
+  currentStep: 'assessment' | 'chat' | 'complete'
+  setCurrentStep: (step: 'assessment' | 'chat' | 'complete') => void
+  checkInData: Partial<CheckInData>
+  updateCheckInData: (updates: Partial<CheckInData>) => void
+  submitCheckIn: () => Promise<CheckInSession>
+  isSubmitting: boolean
+  error: Error | null
+} {
   const { user } = useAuth()
-  const [currentStep, setCurrentStep] = useState<'assessment' | 'chat' | 'mood' | 'complete'>('assessment')
+  const [currentStep, setCurrentStep] = useState<'assessment' | 'chat' | 'complete'>('assessment')
   const [checkInData, setCheckInData] = useState<Partial<CheckInData>>({
     task_completions: []
   })
