@@ -118,15 +118,15 @@ export function useUserStreak(userId?: string, options?: { enabled?: boolean }) 
 
 /**
  * Hook to get today's tasks for check-in
- * Uses cached goals data instead of making separate API call
+ * Uses cached goals data but ensures fresh data by reducing stale time
  */
 export function useTodaysTasks(goalUuid?: string) {
   const { user } = useAuth()
-  const { goals } = useGoals(user?.id)
+  const { goals, refetch: refetchGoals } = useGoals(user?.id)
   
   return useQuery({
     queryKey: checkInKeys.todaysTasks(goalUuid || ''),
-    queryFn: () => {
+    queryFn: async () => {
       if (!goalUuid || !goals) {
         return []
       }
@@ -157,8 +157,11 @@ export function useTodaysTasks(goalUuid?: string) {
       })
     },
     enabled: !!goalUuid && !!goals, // Wait for goals cache to be loaded
-    staleTime: 5 * 60 * 1000, // 5 minutes - same as useGoals
+    staleTime: 0, // Always consider data stale to ensure fresh task completion status
     gcTime: 10 * 60 * 1000, // 10 minutes
+    refetchOnMount: true, // Always refetch when component mounts
+    refetchOnWindowFocus: false, // Disable refetch on focus during check-in
+    refetchOnReconnect: false, // Disable refetch on reconnect during check-in
   })
 }
 

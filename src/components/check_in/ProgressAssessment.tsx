@@ -48,7 +48,9 @@ export function ProgressAssessment() {
   const calculateCurrentProgress = () => {
     if (taskCompletions.length === 0) return 0
     const completed = taskCompletions.filter(t => t.isCompleted).length
-    return Math.round((completed / taskCompletions.length) * 100)
+    const percentage = Math.round((completed / taskCompletions.length) * 100)
+    
+    return percentage
   }
 
   const { markUserInteracted } = useCoach()

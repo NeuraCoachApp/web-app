@@ -64,8 +64,8 @@ export function CheckInProvider({ children }: CheckInProviderProps) {
   // Data hooks - disable refetching during chat step to reduce RPC calls
   const isInChatStep = checkInFlow.currentStep === 'chat'
   
-  // Get user's goals - disable refetching during chat step to reduce RPC calls
-  const { goals, isLoading: goalsLoading } = useGoals(user?.id, { enabled: !isInChatStep })
+  // Get user's goals - always enable to ensure fresh data for check-in
+  const { goals, isLoading: goalsLoading, refetch: refetchGoals } = useGoals(user?.id, { enabled: true })
   const { data: dailyProgress, isLoading: progressLoading, error: progressError } = useDailyProgress(
     selectedGoal?.uuid, 
     { enabled: !isInChatStep }
@@ -103,12 +103,19 @@ export function CheckInProvider({ children }: CheckInProviderProps) {
     }
   }, [goals, goalsLoading, goalUuid])
   
-  // Initialize check-in data with selected goal
+  // Initialize check-in data with selected goal and refresh goals cache
   useEffect(() => {
     if (selectedGoal && !checkInFlow.checkInData.goal_uuid) {
       checkInFlow.updateCheckInData({ goal_uuid: selectedGoal.uuid })
+      
+      // Refresh goals cache to ensure we have the latest task completion data
+      if (user?.id) {
+        refetchGoals().catch(error => {
+          console.warn('⚠️ [CheckInProvider] Failed to refresh goals cache:', error)
+        })
+      }
     }
-  }, [selectedGoal, checkInFlow])
+  }, [selectedGoal, checkInFlow, user?.id, refetchGoals])
   
   // Check if user has already checked in today
   useEffect(() => {
@@ -120,8 +127,13 @@ export function CheckInProvider({ children }: CheckInProviderProps) {
   
   // Helper functions
   const getProgressPercentage = (): number => {
-    if (!dailyProgress) return 0
-    return dailyProgress.progress_percentage || 0
+    // Use todaysTasks data instead of dailyProgress for more accurate calculation
+    if (!todaysTasks || todaysTasks.length === 0) return 0
+    
+    const completedTasks = todaysTasks.filter((task: any) => task.isCompleted)
+    const percentage = Math.round((completedTasks.length / todaysTasks.length) * 100)
+    
+    return percentage
   }
   
   const needsBlockerDiscussion = (): boolean => {
