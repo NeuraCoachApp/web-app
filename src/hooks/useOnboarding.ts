@@ -44,7 +44,7 @@ export const onboardingSteps: OnboardingStep[] = [
   },
   {
     id: 'name_input',
-    text: "What is your name?",
+    text: "What is your first and last name?",
     subtext: "",
     personality: "warm and friendly"
   },
