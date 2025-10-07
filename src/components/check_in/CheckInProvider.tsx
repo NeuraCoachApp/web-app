@@ -61,14 +61,14 @@ export function CheckInProvider({ children }: CheckInProviderProps) {
   // Check-in flow hook
   const checkInFlow = useCheckInFlow()
   
-  // Data hooks - disable refetching during chat step to reduce RPC calls
+  // Data hooks - always enable dailyProgress to ensure fresh task completion data
   const isInChatStep = checkInFlow.currentStep === 'chat'
   
   // Get user's goals - always enable to ensure fresh data for check-in
   const { goals, isLoading: goalsLoading, refetch: refetchGoals } = useGoals(user?.id, { enabled: true })
   const { data: dailyProgress, isLoading: progressLoading, error: progressError } = useDailyProgress(
     selectedGoal?.uuid, 
-    { enabled: !isInChatStep }
+    { enabled: true } // Always enable to get fresh task completion data
   )
   const { data: userStreak, isLoading: streakLoading } = useUserStreak(
     user?.id, 
@@ -103,19 +103,12 @@ export function CheckInProvider({ children }: CheckInProviderProps) {
     }
   }, [goals, goalsLoading, goalUuid])
   
-  // Initialize check-in data with selected goal and refresh goals cache
+  // Initialize check-in data with selected goal
   useEffect(() => {
     if (selectedGoal && !checkInFlow.checkInData.goal_uuid) {
       checkInFlow.updateCheckInData({ goal_uuid: selectedGoal.uuid })
-      
-      // Refresh goals cache to ensure we have the latest task completion data
-      if (user?.id) {
-        refetchGoals().catch(error => {
-          console.warn('⚠️ [CheckInProvider] Failed to refresh goals cache:', error)
-        })
-      }
     }
-  }, [selectedGoal, checkInFlow, user?.id, refetchGoals])
+  }, [selectedGoal, checkInFlow])
   
   // Check if user has already checked in today
   useEffect(() => {
@@ -127,13 +120,10 @@ export function CheckInProvider({ children }: CheckInProviderProps) {
   
   // Helper functions
   const getProgressPercentage = (): number => {
-    // Use todaysTasks data instead of dailyProgress for more accurate calculation
-    if (!todaysTasks || todaysTasks.length === 0) return 0
+    // Use dailyProgress as the source of truth for accurate task completion data
+    if (!dailyProgress) return 0
     
-    const completedTasks = todaysTasks.filter((task: any) => task.isCompleted)
-    const percentage = Math.round((completedTasks.length / todaysTasks.length) * 100)
-    
-    return percentage
+    return dailyProgress.progress_percentage || 0
   }
   
   const needsBlockerDiscussion = (): boolean => {

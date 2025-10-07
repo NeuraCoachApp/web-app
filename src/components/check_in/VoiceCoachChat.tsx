@@ -86,13 +86,13 @@ export function VoiceCoachChat() {
     
     try {
       const progressPercentage = getProgressPercentage()
-      const completedTasks = todaysTasks?.filter((task: any) => task.isCompleted) || []
-      const incompleteTasks = todaysTasks?.filter((task: any) => !task.isCompleted) || []
+      const completedTasks = dailyProgress?.tasks?.filter((task: any) => task.isCompleted) || []
+      const incompleteTasks = dailyProgress?.tasks?.filter((task: any) => !task.isCompleted) || []
       
       let openingMessage = `I see you completed ${progressPercentage}% of your tasks today. `
       
       if (progressPercentage >= 80) {
-        openingMessage += `That's excellent progress! You completed ${completedTasks.length} out of ${todaysTasks?.length || 0} tasks. I'd love to hear about how your day went and understand how you're feeling. What was your experience like today?`
+        openingMessage += `That's excellent progress! You completed ${completedTasks.length} out of ${dailyProgress?.total_tasks || 0} tasks. I'd love to hear about how your day went and understand how you're feeling. What was your experience like today?`
       } else {
         openingMessage += `I notice you had ${incompleteTasks.length} tasks that didn't get completed today. `
         openingMessage += `That's completely normal - some days are harder than others. I'm here to listen and help you work through whatever got in your way. What happened today that made it challenging?`
@@ -110,7 +110,7 @@ export function VoiceCoachChat() {
       
       console.log('🎤 [VoiceCoachChat] Starting conversation with message:', openingMessage)
       console.log('🎤 [VoiceCoachChat] Task context:', { 
-        total: todaysTasks?.length || 0, 
+        total: dailyProgress?.total_tasks || 0, 
         completed: completedTasks.length, 
         incomplete: incompleteTasks.length 
       })
@@ -130,7 +130,7 @@ export function VoiceCoachChat() {
     } catch (error) {
       console.error('❌ [VoiceCoachChat] Error in startConversation:', error)
     }
-  }, [getProgressPercentage, todaysTasks, speak, setPreviewMessage])
+  }, [getProgressPercentage, dailyProgress, speak, setPreviewMessage])
 
   // Check if the AI's latest response contains questions
   const checkAIResponseHasQuestions = async (aiResponse: string): Promise<boolean> => {
@@ -241,12 +241,12 @@ Respond with ONLY "COMPLETE" or "CONTINUE" - no other text.`
   const generateCoachResponse = async (userMessage: string, conversationHistory: ConversationMessage[]): Promise<string> => {
     try {
       const progressPercentage = getProgressPercentage()
-      const completedTasks = todaysTasks?.filter((task: any) => task.isCompleted) || []
-      const incompleteTasks = todaysTasks?.filter((task: any) => !task.isCompleted) || []
+      const completedTasks = dailyProgress?.tasks?.filter((task: any) => task.isCompleted) || []
+      const incompleteTasks = dailyProgress?.tasks?.filter((task: any) => !task.isCompleted) || []
       const currentUserMessageCount = conversationHistory.filter(msg => msg.role === 'user').length
       
       // Build task context for the AI
-      const taskContext = todaysTasks?.map((task: any) => 
+      const taskContext = dailyProgress?.tasks?.map((task: any) => 
         `- "${task.text}" (${task.isCompleted ? 'COMPLETED' : 'NOT COMPLETED'})`
       ).join('\n') || 'No tasks available'
 
@@ -279,7 +279,7 @@ LOW PROGRESS FLOW (<80% completion):
 
 CONVERSATION CONTEXT:
 - Goal: ${selectedGoal?.text}
-- Progress today: ${progressPercentage}% (${completedTasks.length}/${todaysTasks?.length || 0} tasks completed)
+- Progress today: ${progressPercentage}% (${completedTasks.length}/${dailyProgress?.total_tasks || 0} tasks completed)
 - Progress level: ${progressPercentage >= 80 ? 'HIGH (celebrating success)' : 'LOW (working through challenges)'}
 - Current conversation stage: ${currentUserMessageCount <= 1 ? 'INITIAL' : currentUserMessageCount <= 4 ? 'EXPLORATION' : currentUserMessageCount <= 6 ? 'SOLUTION BUILDING' : 'INSIGHT DELIVERY'}
 - User message count: ${currentUserMessageCount}/50
@@ -532,8 +532,8 @@ Use integers only, no decimals.`
   const generateInsights = async (conversationHistory: ConversationMessage[]): Promise<string> => {
     try {
       const progressPercentage = getProgressPercentage()
-      const completedTasks = todaysTasks?.filter((task: any) => task.isCompleted) || []
-      const incompleteTasks = todaysTasks?.filter((task: any) => !task.isCompleted) || []
+      const completedTasks = dailyProgress?.tasks?.filter((task: any) => task.isCompleted) || []
+      const incompleteTasks = dailyProgress?.tasks?.filter((task: any) => !task.isCompleted) || []
       
       let systemPrompt: string
       
@@ -547,7 +547,7 @@ Use integers only, no decimals.`
 
 Context:
 - Goal: ${selectedGoal?.text}
-- Excellent Progress: ${progressPercentage}% completed (${completedTasks.length}/${todaysTasks?.length || 0} tasks)
+- Excellent Progress: ${progressPercentage}% completed (${completedTasks.length}/${dailyProgress?.total_tasks || 0} tasks)
 - Completed tasks: ${completedTasks.map((t: any) => t.text).join(', ')}
 
 Keep it celebratory, positive, and motivating. This will be spoken to the user. No need to mention blockers or adjustments.`
@@ -561,7 +561,7 @@ Keep it celebratory, positive, and motivating. This will be spoken to the user. 
 
 Context:
 - Goal: ${selectedGoal?.text}
-- Progress: ${progressPercentage}% completed (${completedTasks.length}/${todaysTasks?.length || 0} tasks)
+- Progress: ${progressPercentage}% completed (${completedTasks.length}/${dailyProgress?.total_tasks || 0} tasks)
 - Incomplete tasks: ${incompleteTasks.map((t: any) => t.text).join(', ')}
 
 Keep it supportive, solution-focused, and actionable. This will be spoken to the user.`
@@ -639,13 +639,13 @@ Keep it supportive, solution-focused, and actionable. This will be spoken to the
 
       // Start background AI task adjustments while user listens to insights
       // Only perform task adjustments for users with <80% progress (low progress users)
-      if (selectedGoal && todaysTasks && mood && motivation && progressPercentage < 80) {
+      if (selectedGoal && dailyProgress?.tasks && mood && motivation && progressPercentage < 80) {
         console.log('🧠 [VoiceCoachChat] Starting background AI task adjustment for low progress user...')
         import('@/src/lib/ai-task-adjustment').then(async ({ performIntelligentTaskAdjustment }) => {
           try {
             const adjustmentResult = await performIntelligentTaskAdjustment(
               selectedGoal.text,
-              todaysTasks,
+              dailyProgress.tasks,
               {
                 mood: mood,
                 motivation: motivation,

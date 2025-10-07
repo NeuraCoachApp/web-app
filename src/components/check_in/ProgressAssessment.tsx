@@ -22,17 +22,17 @@ export function ProgressAssessment() {
     isCompleted: boolean
   }>>([])
 
-  // Initialize task completions from today's tasks
+  // Initialize task completions from daily progress data
   useEffect(() => {
-    if (todaysTasks && todaysTasks.length > 0) {
-      const completions = todaysTasks.map((task: any) => ({
+    if (dailyProgress?.tasks && dailyProgress.tasks.length > 0) {
+      const completions = dailyProgress.tasks.map((task: any) => ({
         task_uuid: task.uuid,
         isCompleted: task.isCompleted || false
       }))
       setTaskCompletions(completions)
       updateCheckInData({ task_completions: completions })
     }
-  }, [todaysTasks, updateCheckInData])
+  }, [dailyProgress, updateCheckInData])
 
   const handleTaskToggle = (taskUuid: string) => {
     const updatedCompletions = taskCompletions.map(completion => 
@@ -93,7 +93,7 @@ export function ProgressAssessment() {
       </div>
 
       {/* Task List */}
-      {todaysTasks && todaysTasks.length > 0 && (
+      {dailyProgress?.tasks && dailyProgress.tasks.length > 0 && (
         <div className="bg-card/50 rounded-xl border border-border/50 p-6">
           <div className="flex items-center gap-3 mb-6">
             <Calendar className="w-5 h-5 text-primary" />
@@ -101,7 +101,7 @@ export function ProgressAssessment() {
           </div>
           
           <div className="space-y-3">
-            {todaysTasks.map((task: any) => {
+            {dailyProgress.tasks.map((task: any) => {
               const completion = taskCompletions.find(c => c.task_uuid === task.uuid)
               const isCompleted = completion?.isCompleted || false
               
@@ -143,7 +143,7 @@ export function ProgressAssessment() {
       )}
 
       {/* No tasks message */}
-      {(!todaysTasks || todaysTasks.length === 0) && (
+      {(!dailyProgress?.tasks || dailyProgress.tasks.length === 0) && (
         <div className="text-center py-12">
           <Calendar className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
           <h3 className="text-lg font-medium text-foreground mb-2">
